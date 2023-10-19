@@ -1,7 +1,7 @@
 import pytest
 
-from waffle_dough.type.base_type import BaseType
 from waffle_dough.type import DataType, TaskType
+from waffle_dough.type.base_type import BaseType
 
 
 def _type_check(type_member, test_value):
@@ -22,7 +22,6 @@ def _member_check(type_class, test_value):
 
 
 def test_base_type():
-
     class TestType(BaseType):
         TEST = "test"
         TEST2 = "test2"
@@ -39,13 +38,18 @@ def test_data_type(data_type, test_value):
     _member_check(DataType, test_value)
 
 
-@pytest.mark.parametrize("task_type, test_value", [[TaskType.CLASSIFICATION, "classification"],
-                                                    [TaskType.OBJECT_DETECTION, "object_detection"],
-                                                    [TaskType.SEMANTIC_SEGMENTATION, "semantic_segmentation"],
-                                                    [TaskType.INSTANCE_SEGMENTATION, "instance_segmentation"],
-                                                    [TaskType.KEYPOINT_DETECTION, "keypoint_detection"],
-                                                    [TaskType.TEXT_RECOGNITION, "text_recognition"],
-                                                    [TaskType.REGRESSION, "regression"]])
+@pytest.mark.parametrize(
+    "task_type, test_value",
+    [
+        [TaskType.CLASSIFICATION, "classification"],
+        [TaskType.OBJECT_DETECTION, "object_detection"],
+        [TaskType.SEMANTIC_SEGMENTATION, "semantic_segmentation"],
+        [TaskType.INSTANCE_SEGMENTATION, "instance_segmentation"],
+        [TaskType.KEYPOINT_DETECTION, "keypoint_detection"],
+        [TaskType.TEXT_RECOGNITION, "text_recognition"],
+        [TaskType.REGRESSION, "regression"],
+    ],
+)
 def test_task_type(task_type, test_value):
     _type_check(task_type, test_value)
     _member_check(TaskType, test_value)
