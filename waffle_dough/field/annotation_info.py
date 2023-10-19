@@ -2,8 +2,8 @@ from typing import Union
 
 from waffle_utils.validator import setter_type_validator
 
+from waffle_dough.math.geometry import convert_rle_to_polygon, get_polygon_area
 from waffle_dough.type import TaskType
-from waffle_dough.util.math.geometry import convert_rle_to_polygon, get_polygon_area
 
 from .base_field import BaseField
 

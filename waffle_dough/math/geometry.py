@@ -64,6 +64,5 @@ def get_polygon_area(polygon: list[float]) -> float:
     Returns:
         float: polygon area.
     """
-    area = 0
-    area += Polygon([(x, y) for x, y in zip(polygon[::2], polygon[1::2])]).area
+    area = Polygon([(x, y) for x, y in zip(polygon[::2], polygon[1::2])]).area
     return area
