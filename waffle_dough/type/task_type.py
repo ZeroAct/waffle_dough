@@ -9,3 +9,5 @@ class TaskType(BaseType):
     KEYPOINT_DETECTION = "keypoint_detection"
     TEXT_RECOGNITION = "text_recognition"
     REGRESSION = "regression"
+
+    AGNOSTIC = "agnostic"
