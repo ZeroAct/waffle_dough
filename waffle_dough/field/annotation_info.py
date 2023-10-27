@@ -19,7 +19,7 @@ class AnnotationInfo(BaseField):
     value: Optional[float] = Field(None)
     iscrowd: Optional[int] = Field(None)
     score: Optional[float] = Field(None)
-    is_prediction: Optional[bool] = Field(None)
+    is_prediction: Optional[bool] = Field(False)
 
     extra_required_fields: ClassVar[dict[TaskType, list[str]]] = {
         TaskType.CLASSIFICATION: ["image_id", "category_id"],

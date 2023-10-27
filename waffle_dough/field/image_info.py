@@ -3,7 +3,7 @@ from typing import Optional, Union
 from pydantic import Field, field_validator
 
 from waffle_dough.field.base_field import BaseField
-from waffle_dough.type import TaskType
+from waffle_dough.type import SplitType, TaskType, get_split_types
 
 
 class ImageInfo(BaseField):
@@ -12,6 +12,8 @@ class ImageInfo(BaseField):
     height: int = Field(...)
     original_file_name: Optional[str] = Field(None)
     date_captured: Optional[str] = Field(None)
+    labeled: bool = Field(False)
+    split: SplitType = Field(SplitType.UNSET.lower())
 
     def __init__(
         self,

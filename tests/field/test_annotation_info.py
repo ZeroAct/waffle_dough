@@ -36,6 +36,7 @@ def _test_annotation_info(task, kwargs, expected_output):
                 "task": "classification",
                 "image_id": "test",
                 "category_id": "test",
+                "is_prediction": False,
             },
         ),
         (
@@ -67,6 +68,7 @@ def test_classification_annotation_info(task, kwargs, expected_output):
                 "bbox": [0, 0, 1, 1],
                 "area": 1,
                 "iscrowd": 0,
+                "is_prediction": False,
             },
         ),
         (
@@ -119,6 +121,7 @@ def test_object_detection_annotation_info(task, kwargs, expected_output):
                 "segmentation": [[0, 0, 1, 0, 1, 1, 0, 1]],
                 "area": 1,
                 "iscrowd": 0,
+                "is_prediction": False,
             },
         ),
         (
@@ -180,6 +183,27 @@ def test_semantic_segmentation_annotation_info(task, kwargs, expected_output):
                 "segmentation": [[0, 0, 1, 0, 1, 1, 0, 1]],
                 "area": 1,
                 "iscrowd": 0,
+                "is_prediction": False,
+            },
+        ),
+        (
+            TaskType.INSTANCE_SEGMENTATION,
+            {
+                "image_id": "test",
+                "category_id": "test",
+                "segmentation": [[0, 0, 1, 0, 1, 1, 0, 1]],
+                "score": 0.5,
+            },
+            {
+                "task": "instance_segmentation",
+                "image_id": "test",
+                "category_id": "test",
+                "bbox": [0, 0, 1, 1],
+                "segmentation": [[0, 0, 1, 0, 1, 1, 0, 1]],
+                "area": 1,
+                "iscrowd": 0,
+                "score": 0.5,
+                "is_prediction": True,
             },
         ),
         (

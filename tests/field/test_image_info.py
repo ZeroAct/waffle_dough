@@ -47,6 +47,8 @@ def _test_image_info(task, kwargs, expected_output):
                 "file_name": "test.jpg",
                 "width": 100,
                 "height": 100,
+                "labeled": False,
+                "split": "unset",
             },
         ),
         (
@@ -58,6 +60,8 @@ def _test_image_info(task, kwargs, expected_output):
                 "width": 100,
                 "height": 100,
                 "original_file_name": "test.jpg",
+                "labeled": False,
+                "split": "unset",
             },
         ),
         (
@@ -76,6 +80,8 @@ def _test_image_info(task, kwargs, expected_output):
                 "height": 100,
                 "original_file_name": "test.jpg",
                 "date_captured": "2021-01-01",
+                "labeled": False,
+                "split": "unset",
             },
         ),
         (
