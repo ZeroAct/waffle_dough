@@ -1,17 +1,53 @@
-from typing import Optional
+from typing import ClassVar, Optional
+
+from pydantic import Field, field_validator
 
 from waffle_dough.field.base_field import BaseField
 from waffle_dough.type import TaskType
 
 
 class CategoryInfo(BaseField):
-    name: str
-    supercategory: str = "object"
-    keypoints: Optional[list[str]] = None
-    skeleton: Optional[list[list[int]]] = None
+    name: str = Field(..., kw_only=True)
+    supercategory: str = Field(..., kw_only=True)
+    keypoints: Optional[list[str]] = Field(None, kw_only=True)
+    skeleton: Optional[list[list[int]]] = Field(None, kw_only=True)
+
+    extra_required_fields: ClassVar[dict[TaskType, list[str]]] = {
+        TaskType.CLASSIFICATION: ["name"],
+        TaskType.OBJECT_DETECTION: ["name"],
+        TaskType.SEMANTIC_SEGMENTATION: ["name"],
+        TaskType.INSTANCE_SEGMENTATION: ["name"],
+        TaskType.KEYPOINT_DETECTION: ["name", "keypoints", "skeleton"],
+        TaskType.TEXT_RECOGNITION: ["name"],
+        TaskType.REGRESSION: ["name"],
+    }
+
+    @field_validator("keypoints")
+    def _check_keypoints_after(cls, v):
+        if v is not None:
+            for keypoint in v:
+                if not isinstance(keypoint, str):
+                    raise ValueError(f"each keypoint must be string: {keypoint}")
+        return v
+
+    @field_validator("skeleton")
+    def _check_skeleton_after(cls, v, values):
+        max_index = 0
+        if v is not None:
+            for edge in v:
+                if not isinstance(edge, list):
+                    raise ValueError(f"each edge must be list: {edge}")
+                if len(edge) != 2:
+                    raise ValueError(f"each edge must have 2 elements: {edge}")
+                max_index = max(max_index, max(edge))
+            if max_index >= len(values.data["keypoints"]):
+                raise ValueError(
+                    f"skeleton index out of range: {max_index}. should be less than the number of keypoint: {len(values.data['keypoints'])}"
+                )
+        return v
 
     @classmethod
-    def classification(cls, name: str, supercategory: str = "object") -> "CategoryInfo":
+    def classification(cls, *, name: str, supercategory: str = "object") -> "CategoryInfo":
         """Classification Category Format
 
         Args:
@@ -30,6 +66,7 @@ class CategoryInfo(BaseField):
     @classmethod
     def object_detection(
         cls,
+        *,
         name: str,
         supercategory: str = "object",
     ) -> "CategoryInfo":

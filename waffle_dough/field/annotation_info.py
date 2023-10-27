@@ -1,6 +1,6 @@
-from typing import Optional, Union
+from typing import ClassVar, Optional, Union
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from waffle_dough.field.base_field import BaseField
 from waffle_dough.math.geometry import convert_rle_to_polygon, get_polygon_area
@@ -8,30 +8,59 @@ from waffle_dough.type import TaskType
 
 
 class AnnotationInfo(BaseField):
-    category_id: str
-    bbox: Optional[list[float]] = None
-    segmentation: Optional[Union[dict, list[list[float]]]] = None
-    area: Optional[float] = None
-    keypoints: Optional[list[float]] = None
-    num_keypoints: Optional[int] = None
-    caption: Optional[str] = None
-    value: Optional[float] = None
-    iscrowd: Optional[int] = None
-    score: Optional[float] = None
-    is_prediction: Optional[bool] = None
+    image_id: str = Field(...)
+    category_id: str = Field(None)
+    bbox: Optional[list[float]] = Field(None)
+    segmentation: Optional[Union[dict, list[list[float]]]] = Field(None)
+    area: Optional[float] = Field(None)
+    keypoints: Optional[list[float]] = Field(None)
+    num_keypoints: Optional[int] = Field(None)
+    caption: Optional[str] = Field(None)
+    value: Optional[float] = Field(None)
+    iscrowd: Optional[int] = Field(None)
+    score: Optional[float] = Field(None)
+    is_prediction: Optional[bool] = Field(None)
+
+    extra_required_fields: ClassVar[dict[TaskType, list[str]]] = {
+        TaskType.CLASSIFICATION: ["image_id", "category_id"],
+        TaskType.OBJECT_DETECTION: ["image_id", "category_id", "bbox"],
+        TaskType.SEMANTIC_SEGMENTATION: ["image_id", "category_id", "segmentation"],
+        TaskType.INSTANCE_SEGMENTATION: ["image_id", "category_id", "segmentation"],
+        TaskType.KEYPOINT_DETECTION: ["image_id", "category_id", "keypoints"],
+        TaskType.TEXT_RECOGNITION: ["image_id", "caption"],
+        TaskType.REGRESSION: ["image_id", "category_id", "value"],
+    }
 
     @field_validator("bbox")
     def check_bbox(cls, v):
-        if v and len(v) != 4:
-            raise ValueError("the length of bbox should be 4.")
+        if v:
+            if len(v) != 4:
+                raise ValueError("the length of bbox should be 4.")
+            if v[2] <= 0 or v[3] <= 0:
+                raise ValueError("the width and height of bbox should be greater than 0.")
         return v
 
     @field_validator("segmentation")
     def check_segmentation(cls, v):
         if v:
+            if isinstance(v, dict):
+                if "counts" not in v or "size" not in v:
+                    raise ValueError(f"the segmentation should have 'counts' and 'size'. Given {v}")
+                v = convert_rle_to_polygon(v)
+
             for segment in v:
                 if len(segment) % 2 != 0:
                     raise ValueError("the length of segmentation should be divisible by 2.")
+                if len(segment) < 6:
+                    raise ValueError(
+                        "the length of segmentation should be greater than or equal to 6."
+                    )
+        return v
+
+    @field_validator("area")
+    def check_area(cls, v):
+        if v and v < 0:
+            raise ValueError("area should be greater than or equal to 0.")
         return v
 
     @field_validator("keypoints")
@@ -40,23 +69,48 @@ class AnnotationInfo(BaseField):
             raise ValueError("the length of keypoints should be divisible by 3.")
         return v
 
-    def __init__(self, **data):
-        if not hasattr(data, "task"):
-            data.update({"task": TaskType.AGNOSTIC.upper()})
+    @field_validator("num_keypoints")
+    def check_num_keypoints(cls, v):
+        if v and v < 0:
+            raise ValueError("num_keypoints should be greater than or equal to 0.")
+        return v
 
-        super().__init__(**data)
+    @field_validator("iscrowd")
+    def check_iscrowd(cls, v):
+        if v and v not in [0, 1]:
+            raise ValueError("iscrowd should be 0 or 1.")
+        return v
 
-        if isinstance(self.segmentation, dict):
-            self.segmentation = convert_rle_to_polygon(self.segmentation)
+    @field_validator("score")
+    def check_score(cls, v):
+        if v and (v < 0 or v > 1):
+            raise ValueError("score should be in [0, 1].")
+        return v
 
-        if self.area is None:
-            if self.segmentation is not None:
-                self.area = 0
-                for polygon in self.segmentation:
-                    self.area += get_polygon_area(polygon)
-            elif self.bbox is not None:
-                self.area = self.bbox[2] * self.bbox[3]
+    @field_validator("is_prediction")
+    def check_is_prediction(cls, v):
+        if v and not isinstance(v, bool):
+            raise ValueError("is_prediction should be bool.")
+        return v
 
+    @field_validator("value")
+    def check_value(cls, v):
+        if v and not isinstance(v, (int, float)):
+            raise ValueError("value should be int or float.")
+        return v
+
+    @field_validator("caption")
+    def check_caption(cls, v):
+        if v and not isinstance(v, str):
+            raise ValueError("caption should be str.")
+        return v
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.set_default_values()
+
+    def set_default_values(self):
+        # init default values
         if self.bbox is None:
             if self.segmentation is not None:
                 xs = [x for polygon in self.segmentation for x in polygon[::2]]
@@ -67,6 +121,14 @@ class AnnotationInfo(BaseField):
                 h = max(ys) - y1
                 self.bbox = [x1, y1, w, h]
 
+        if self.area is None:
+            if self.segmentation is not None:
+                self.area = 0
+                for polygon in self.segmentation:
+                    self.area += get_polygon_area(polygon)
+            elif self.bbox is not None:
+                self.area = self.bbox[2] * self.bbox[3]
+
         if self.iscrowd is None and self.bbox is not None:
             self.iscrowd = 0
 
@@ -74,19 +136,19 @@ class AnnotationInfo(BaseField):
             self.num_keypoints = len(self.keypoints) // 3
 
         if self.score is not None:
-            if self.score < 0 or self.score > 1:
-                raise ValueError("score should be in [0, 1].")
             self.is_prediction = True
 
     @classmethod
     def classification(
         cls,
+        image_id: str,
         category_id: str,
         score: float = None,
     ) -> "AnnotationInfo":
         """Classification Annotation Format
 
         Args:
+            image_id (str): image id.
             category_id (str): category id.
             score (float, optional): prediction score. Default to None.
 
@@ -95,6 +157,7 @@ class AnnotationInfo(BaseField):
         """
         return cls(
             task=TaskType.CLASSIFICATION,
+            image_id=image_id,
             category_id=category_id,
             score=score,
         )
@@ -102,6 +165,7 @@ class AnnotationInfo(BaseField):
     @classmethod
     def object_detection(
         cls,
+        image_id: str,
         category_id: str,
         bbox: list[float],
         area: int = None,
@@ -111,6 +175,7 @@ class AnnotationInfo(BaseField):
         """Object Detection Annotation Format
 
         Args:
+            image_id (str): image id.
             category_id (str): category id.
             bbox (list[float]): [x1, y1, w, h].
             area (int): bbox area.
@@ -122,6 +187,7 @@ class AnnotationInfo(BaseField):
         """
         return cls(
             task=TaskType.OBJECT_DETECTION,
+            image_id=image_id,
             category_id=category_id,
             bbox=bbox,
             area=area,
@@ -132,6 +198,7 @@ class AnnotationInfo(BaseField):
     @classmethod
     def semantic_segmentation(
         cls,
+        image_id: str,
         category_id: str,
         segmentation: Union[list[list[float]], dict],
         bbox: list[float] = None,
@@ -142,6 +209,7 @@ class AnnotationInfo(BaseField):
         """Segmentation Annotation Format
 
         Args:
+            image_id (str): image id.
             category_id (str): category id.
             bbox (list[float]): [x1, y1, w, h].
             segmentation (Union[list[list[float]], dict]): [[x1, y1, x2, y2, x3, y3, ...], [polygon]] or RLE.
@@ -154,6 +222,7 @@ class AnnotationInfo(BaseField):
         """
         return cls(
             task=TaskType.SEMANTIC_SEGMENTATION,
+            image_id=image_id,
             category_id=category_id,
             bbox=bbox,
             segmentation=segmentation,
@@ -165,6 +234,7 @@ class AnnotationInfo(BaseField):
     @classmethod
     def instance_segmentation(
         cls,
+        image_id: str,
         category_id: str,
         segmentation: Union[list[list[float]], dict],
         bbox: list[float] = None,
@@ -175,6 +245,7 @@ class AnnotationInfo(BaseField):
         """Instance Annotation Format
 
         Args:
+            image_id (str): image id.
             category_id (str): category id.
             bbox (list[float]): [x1, y1, w, h].
             segmentation (Union[list[list[float]], dict]): [[x1, y1, x2, y2, x3, y3, ...], [polygon]] or RLE.
@@ -187,6 +258,7 @@ class AnnotationInfo(BaseField):
         """
         return cls(
             task=TaskType.INSTANCE_SEGMENTATION,
+            image_id=image_id,
             category_id=category_id,
             bbox=bbox,
             segmentation=segmentation,
@@ -198,6 +270,7 @@ class AnnotationInfo(BaseField):
     @classmethod
     def keypoint_detection(
         cls,
+        image_id: str,
         category_id: str,
         keypoints: list[float],
         bbox: list[float],
@@ -210,6 +283,7 @@ class AnnotationInfo(BaseField):
         """Keypoint Detection Annotation Format
 
         Args:
+            image_id (str): image id.
             category_id (str): category id.
             bbox (list[float]): [x1, y1, w, h].
             keypoints (list[float]):
@@ -226,6 +300,7 @@ class AnnotationInfo(BaseField):
         """
         return cls(
             task=TaskType.KEYPOINT_DETECTION,
+            image_id=image_id,
             category_id=category_id,
             bbox=bbox,
             keypoints=keypoints,
@@ -237,10 +312,11 @@ class AnnotationInfo(BaseField):
         )
 
     @classmethod
-    def regression(cls, category_id: str, value: float) -> "AnnotationInfo":
+    def regression(cls, image_id: str, category_id: str, value: float) -> "AnnotationInfo":
         """Regression Annotation Format
 
         Args:
+            image_id (str): image id.
             category_id (str): category id.
             value (float): regression value.
 
@@ -249,6 +325,7 @@ class AnnotationInfo(BaseField):
         """
         return cls(
             task=TaskType.REGRESSION,
+            image_id=image_id,
             category_id=category_id,
             value=value,
         )
@@ -256,6 +333,7 @@ class AnnotationInfo(BaseField):
     @classmethod
     def text_recognition(
         cls,
+        image_id: str,
         category_id: str,
         caption: str,
         score: float = None,
@@ -263,6 +341,7 @@ class AnnotationInfo(BaseField):
         """Text Recognition Annotation Format
 
         Args:
+            image_id (str): image id.
             category_id (str): category id.
             caption (str): string.
             score (float, optional): prediction score. Default to None.
@@ -272,6 +351,7 @@ class AnnotationInfo(BaseField):
         """
         return cls(
             task=TaskType.TEXT_RECOGNITION,
+            image_id=image_id,
             category_id=category_id,
             caption=caption,
             score=score,
