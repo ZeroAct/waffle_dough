@@ -1,6 +1,6 @@
 from typing import Optional, Union
 
-from pydantic import Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from waffle_dough.field.base_field import BaseField
 from waffle_dough.type import SplitType, TaskType, get_split_types
@@ -92,3 +92,8 @@ class ImageInfo(BaseField):
             original_file_name=original_file_name,
             date_captured=date_captured,
         )
+
+
+class UpdateImageInfo(BaseModel):
+    labeled: Optional[bool] = Field(None)
+    split: Optional[SplitType] = Field(None)

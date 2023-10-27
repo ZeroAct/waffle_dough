@@ -1,6 +1,6 @@
 from typing import ClassVar, Optional, Union
 
-from pydantic import Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from waffle_dough.field.base_field import BaseField
 from waffle_dough.math.geometry import convert_rle_to_polygon, get_polygon_area
@@ -356,3 +356,17 @@ class AnnotationInfo(BaseField):
             caption=caption,
             score=score,
         )
+
+
+class UpdateAnnotationInfo(BaseModel):
+    category_id: Optional[str] = Field(None)
+    bbox: Optional[list[float]] = Field(None)
+    segmentation: Optional[Union[dict, list[list[float]]]] = Field(None)
+    area: Optional[float] = Field(None)
+    keypoints: Optional[list[float]] = Field(None)
+    num_keypoints: Optional[int] = Field(None)
+    caption: Optional[str] = Field(None)
+    value: Optional[float] = Field(None)
+    iscrowd: Optional[int] = Field(None)
+    score: Optional[float] = Field(None)
+    is_prediction: Optional[bool] = Field(None)

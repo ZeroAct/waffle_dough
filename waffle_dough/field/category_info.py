@@ -1,6 +1,6 @@
 from typing import ClassVar, Optional
 
-from pydantic import Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from waffle_dough.field.base_field import BaseField
 from waffle_dough.type import TaskType
@@ -195,3 +195,10 @@ class CategoryInfo(BaseField):
             name=name,
             supercategory=supercategory,
         )
+
+
+class UpdateCategoryInfo(BaseModel):
+    name: Optional[str] = Field(None)
+    supercategory: Optional[str] = Field(None)
+    keypoints: Optional[list[str]] = Field(None)
+    skeleton: Optional[list[list[int]]] = Field(None)
