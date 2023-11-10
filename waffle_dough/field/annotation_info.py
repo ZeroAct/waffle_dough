@@ -1,10 +1,16 @@
 from typing import ClassVar, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator
+import numpy as np
+from pydantic import BaseModel, Field, field_validator, validator
 
 from waffle_dough.field.base_field import BaseField
-from waffle_dough.math.geometry import convert_rle_to_polygon, get_polygon_area
-from waffle_dough.type import TaskType
+from waffle_dough.math.box import convert_box, get_box_area
+from waffle_dough.math.segmentation import (
+    convert_segmentation,
+    get_segmentation_area,
+    get_segmentation_box,
+)
+from waffle_dough.type import BoxType, SegmentationType, TaskType
 
 
 class AnnotationInfo(BaseField):
@@ -46,7 +52,9 @@ class AnnotationInfo(BaseField):
             if isinstance(v, dict):
                 if "counts" not in v or "size" not in v:
                     raise ValueError(f"the segmentation should have 'counts' and 'size'. Given {v}")
-                v = convert_rle_to_polygon(v)
+                v = convert_segmentation(v, SegmentationType.RLE, SegmentationType.POLYGON)
+            elif isinstance(v, np.ndarray):
+                v = convert_segmentation(v, SegmentationType.MASK, SegmentationType.POLYGON)
 
             for segment in v:
                 if len(segment) % 2 != 0:
@@ -113,21 +121,13 @@ class AnnotationInfo(BaseField):
         # init default values
         if self.bbox is None:
             if self.segmentation is not None:
-                xs = [x for polygon in self.segmentation for x in polygon[::2]]
-                ys = [y for polygon in self.segmentation for y in polygon[1::2]]
-                x1 = min(xs)
-                y1 = min(ys)
-                w = max(xs) - x1
-                h = max(ys) - y1
-                self.bbox = [x1, y1, w, h]
+                self.bbox = get_segmentation_box(self.segmentation, SegmentationType.POLYGON)
 
         if self.area is None:
             if self.segmentation is not None:
-                self.area = 0
-                for polygon in self.segmentation:
-                    self.area += get_polygon_area(polygon)
+                self.area = get_segmentation_area(self.segmentation, SegmentationType.POLYGON)
             elif self.bbox is not None:
-                self.area = self.bbox[2] * self.bbox[3]
+                self.area = get_box_area(self.bbox, BoxType.XYWH)
 
         if self.iscrowd is None and self.bbox is not None:
             self.iscrowd = 0
@@ -370,3 +370,132 @@ class UpdateAnnotationInfo(BaseModel):
     iscrowd: Optional[int] = Field(None)
     score: Optional[float] = Field(None)
     is_prediction: Optional[bool] = Field(None)
+
+    # def __init__(self, task: Union[str, TaskType], *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+
+    #     params = self.model_dump()
+    #     for key in list(params.keys()):
+    #         if params.get(key, None) is not None:
+    #             # check validation using AnnotationInfo validator
+    #             AnnotationInfo.check_bbox()
+
+    @classmethod
+    def classification(
+        cls,
+        category_id: str = None,
+        score: float = None,
+    ) -> "UpdateAnnotationInfo":
+        return cls(
+            task=TaskType.CLASSIFICATION,
+            category_id=category_id,
+            score=score,
+        )
+
+    @classmethod
+    def object_detection(
+        cls,
+        category_id: str = None,
+        bbox: list[float] = None,
+        area: int = None,
+        iscrowd: int = None,
+        score: float = None,
+    ) -> "UpdateAnnotationInfo":
+        return cls(
+            task=TaskType.OBJECT_DETECTION,
+            category_id=category_id,
+            bbox=bbox,
+            area=area,
+            iscrowd=iscrowd,
+            score=score,
+        )
+
+    @classmethod
+    def semantic_segmentation(
+        cls,
+        category_id: str = None,
+        segmentation: Union[list[list[float]], dict] = None,
+        bbox: list[float] = None,
+        area: int = None,
+        iscrowd: int = None,
+        score: float = None,
+    ) -> "UpdateAnnotationInfo":
+        return cls(
+            task=TaskType.SEMANTIC_SEGMENTATION,
+            category_id=category_id,
+            segmentation=segmentation,
+            bbox=bbox,
+            area=area,
+            iscrowd=iscrowd,
+            score=score,
+        )
+
+    @classmethod
+    def instance_segmentation(
+        cls,
+        category_id: str = None,
+        segmentation: Union[list[list[float]], dict] = None,
+        bbox: list[float] = None,
+        area: int = None,
+        iscrowd: int = None,
+        score: float = None,
+    ) -> "UpdateAnnotationInfo":
+        return cls(
+            task=TaskType.INSTANCE_SEGMENTATION,
+            category_id=category_id,
+            segmentation=segmentation,
+            bbox=bbox,
+            area=area,
+            iscrowd=iscrowd,
+            score=score,
+        )
+
+    @classmethod
+    def keypoint_detection(
+        cls,
+        category_id: str = None,
+        keypoints: list[float] = None,
+        bbox: list[float] = None,
+        num_keypoints: int = None,
+        area: int = None,
+        segmentation: list[list[float]] = None,
+        iscrowd: int = None,
+        score: list[float] = None,
+    ) -> "UpdateAnnotationInfo":
+        return cls(
+            task=TaskType.KEYPOINT_DETECTION,
+            category_id=category_id,
+            keypoints=keypoints,
+            bbox=bbox,
+            num_keypoints=num_keypoints,
+            area=area,
+            segmentation=segmentation,
+            iscrowd=iscrowd,
+            score=score,
+        )
+
+    @classmethod
+    def regression(
+        cls,
+        category_id: str = None,
+        value: float = None,
+    ) -> "UpdateAnnotationInfo":
+        return cls(
+            task=TaskType.REGRESSION,
+            category_id=category_id,
+            value=value,
+        )
+
+    @classmethod
+    def text_recognition(
+        cls,
+        category_id: str = None,
+        caption: str = None,
+        score: float = None,
+    ) -> "UpdateAnnotationInfo":
+        return cls(
+            task=TaskType.TEXT_RECOGNITION,
+            category_id=category_id,
+            caption=caption,
+            score=score,
+        )

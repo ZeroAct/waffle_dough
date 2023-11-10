@@ -3,7 +3,6 @@ from typing import Union
 
 import cv2
 import numpy as np
-from waffle_utils.file import io
 from waffle_utils.validator import setter_type_validator
 
 from waffle_dough.type import ColorType, get_color_types
