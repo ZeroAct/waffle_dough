@@ -9,7 +9,7 @@ class Category(Base):
 
     id = Column(String, primary_key=True)
     task = Column(String)
-    name = Column(String)
+    name = Column(String, unique=True)
     supercategory = Column(String)
     keypoints = Column(JSON)
     skeleton = Column(JSON)

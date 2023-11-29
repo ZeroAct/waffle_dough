@@ -4,6 +4,18 @@ import numpy as np
 from pydantic import BaseModel, Field, field_validator, validator
 
 from waffle_dough.field.base_field import BaseField
+from waffle_dough.field.validator.annotation_validator import (
+    validate_area,
+    validate_bbox,
+    validate_caption,
+    validate_is_prediction,
+    validate_iscrowd,
+    validate_keypoints,
+    validate_num_keypoints,
+    validate_score,
+    validate_segmentation,
+    validate_value,
+)
 from waffle_dough.math.box import convert_box, get_box_area
 from waffle_dough.math.segmentation import (
     convert_segmentation,
@@ -39,79 +51,43 @@ class AnnotationInfo(BaseField):
 
     @field_validator("bbox")
     def check_bbox(cls, v):
-        if v:
-            if len(v) != 4:
-                raise ValueError("the length of bbox should be 4.")
-            if v[2] <= 0 or v[3] <= 0:
-                raise ValueError("the width and height of bbox should be greater than 0.")
-        return v
+        return validate_bbox(v)
 
     @field_validator("segmentation")
     def check_segmentation(cls, v):
-        if v:
-            if isinstance(v, dict):
-                if "counts" not in v or "size" not in v:
-                    raise ValueError(f"the segmentation should have 'counts' and 'size'. Given {v}")
-                v = convert_segmentation(v, SegmentationType.RLE, SegmentationType.POLYGON)
-            elif isinstance(v, np.ndarray):
-                v = convert_segmentation(v, SegmentationType.MASK, SegmentationType.POLYGON)
-
-            for segment in v:
-                if len(segment) % 2 != 0:
-                    raise ValueError("the length of segmentation should be divisible by 2.")
-                if len(segment) < 6:
-                    raise ValueError(
-                        "the length of segmentation should be greater than or equal to 6."
-                    )
-        return v
+        return validate_segmentation(v)
 
     @field_validator("area")
     def check_area(cls, v):
-        if v and v < 0:
-            raise ValueError("area should be greater than or equal to 0.")
-        return v
+        return validate_area(v)
 
     @field_validator("keypoints")
     def check_keypoints(cls, v):
-        if v and len(v) % 3 != 0:
-            raise ValueError("the length of keypoints should be divisible by 3.")
-        return v
+        return validate_keypoints(v)
 
     @field_validator("num_keypoints")
     def check_num_keypoints(cls, v):
-        if v and v < 0:
-            raise ValueError("num_keypoints should be greater than or equal to 0.")
-        return v
-
-    @field_validator("iscrowd")
-    def check_iscrowd(cls, v):
-        if v and v not in [0, 1]:
-            raise ValueError("iscrowd should be 0 or 1.")
-        return v
-
-    @field_validator("score")
-    def check_score(cls, v):
-        if v and (v < 0 or v > 1):
-            raise ValueError("score should be in [0, 1].")
-        return v
-
-    @field_validator("is_prediction")
-    def check_is_prediction(cls, v):
-        if v and not isinstance(v, bool):
-            raise ValueError("is_prediction should be bool.")
-        return v
+        return validate_num_keypoints(v)
 
     @field_validator("value")
     def check_value(cls, v):
-        if v and not isinstance(v, (int, float)):
-            raise ValueError("value should be int or float.")
-        return v
+        return validate_value(v)
 
     @field_validator("caption")
     def check_caption(cls, v):
-        if v and not isinstance(v, str):
-            raise ValueError("caption should be str.")
-        return v
+        return validate_caption(v)
+
+    @field_validator("iscrowd")
+    def check_iscrowd(cls, v):
+        return validate_iscrowd(v)
+
+    @field_validator("score")
+    def check_score(cls, v):
+        return validate_score(v)
+
+    @field_validator("is_prediction")
+    def check_is_prediction(cls, v):
+        return validate_is_prediction(v)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -371,14 +347,45 @@ class UpdateAnnotationInfo(BaseModel):
     score: Optional[float] = Field(None)
     is_prediction: Optional[bool] = Field(None)
 
-    # def __init__(self, task: Union[str, TaskType], *args, **kwargs):
-    #     super().__init__(*args, **kwargs)
+    @field_validator("bbox")
+    def check_bbox(cls, v):
+        return validate_bbox(v)
 
-    #     params = self.model_dump()
-    #     for key in list(params.keys()):
-    #         if params.get(key, None) is not None:
-    #             # check validation using AnnotationInfo validator
-    #             AnnotationInfo.check_bbox()
+    @field_validator("segmentation")
+    def check_segmentation(cls, v):
+        return validate_segmentation(v)
+
+    @field_validator("area")
+    def check_area(cls, v):
+        return validate_area(v)
+
+    @field_validator("keypoints")
+    def check_keypoints(cls, v):
+        return validate_keypoints(v)
+
+    @field_validator("num_keypoints")
+    def check_num_keypoints(cls, v):
+        return validate_num_keypoints(v)
+
+    @field_validator("value")
+    def check_value(cls, v):
+        return validate_value(v)
+
+    @field_validator("caption")
+    def check_caption(cls, v):
+        return validate_caption(v)
+
+    @field_validator("iscrowd")
+    def check_iscrowd(cls, v):
+        return validate_iscrowd(v)
+
+    @field_validator("score")
+    def check_score(cls, v):
+        return validate_score(v)
+
+    @field_validator("is_prediction")
+    def check_is_prediction(cls, v):
+        return validate_is_prediction(v)
 
     @classmethod
     def classification(

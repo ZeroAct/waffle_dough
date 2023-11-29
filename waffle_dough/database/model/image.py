@@ -9,7 +9,7 @@ class Image(Base):
 
     id = Column(String, primary_key=True)
     task = Column(String)
-    file_name = Column(String)
+    file_name = Column(String, unique=True)
     width = Column(Integer)
     height = Column(Integer)
     original_file_name = Column(String)
