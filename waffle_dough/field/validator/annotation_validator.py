@@ -9,6 +9,8 @@ from waffle_dough.type import BoxType, SegmentationType, TaskType
 
 def validate_bbox(v: list[float], box_type: Union[str, BoxType] = BoxType.XYWH) -> list[float]:
     if v:
+        if box_type != BoxType.XYWH:
+            v = convert_box(v, box_type, BoxType.XYWH)
         if len(v) != 4:
             raise ValueError("the length of bbox should be 4.")
         if v[2] <= 0 or v[3] <= 0:

@@ -3,6 +3,10 @@ from typing import ClassVar, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from waffle_dough.field.base_field import BaseField
+from waffle_dough.field.validator.category_validator import (
+    validate_keypoints,
+    validate_skeleton,
+)
 from waffle_dough.type import TaskType
 
 
@@ -23,28 +27,12 @@ class CategoryInfo(BaseField):
     }
 
     @field_validator("keypoints")
-    def _check_keypoints_after(cls, v):
-        if v is not None:
-            for keypoint in v:
-                if not isinstance(keypoint, str):
-                    raise ValueError(f"each keypoint must be string: {keypoint}")
-        return v
+    def check_keypoints(cls, v):
+        return validate_keypoints(v)
 
     @field_validator("skeleton")
-    def _check_skeleton_after(cls, v, values):
-        max_index = 0
-        if v is not None:
-            for edge in v:
-                if not isinstance(edge, list):
-                    raise ValueError(f"each edge must be list: {edge}")
-                if len(edge) != 2:
-                    raise ValueError(f"each edge must have 2 elements: {edge}")
-                max_index = max(max_index, max(edge))
-            if max_index >= len(values.data["keypoints"]):
-                raise ValueError(
-                    f"skeleton index out of range: {max_index}. should be less than the number of keypoint: {len(values.data['keypoints'])}"
-                )
-        return v
+    def check_skeleton(cls, v, values):
+        return validate_skeleton(v, values.data.get("keypoints", None))
 
     @classmethod
     def classification(cls, *, name: str, supercategory: str = "object") -> "CategoryInfo":
@@ -202,3 +190,80 @@ class UpdateCategoryInfo(BaseModel):
     supercategory: Optional[str] = Field(None)
     keypoints: Optional[list[str]] = Field(None)
     skeleton: Optional[list[list[int]]] = Field(None)
+
+    @field_validator("keypoints")
+    def check_keypoints(cls, v):
+        return validate_keypoints(v)
+
+    @field_validator("skeleton")
+    def check_skeleton(cls, v, values):
+        return validate_skeleton(v, values.data.get("keypoints", None))
+
+    @classmethod
+    def classification(
+        cls, name: Optional[str] = None, supercategory: Optional[str] = None
+    ) -> "UpdateCategoryInfo":
+        return cls(
+            name=name,
+            supercategory=supercategory,
+        )
+
+    @classmethod
+    def object_detection(
+        cls, name: Optional[str] = None, supercategory: Optional[str] = None
+    ) -> "UpdateCategoryInfo":
+        return cls(
+            name=name,
+            supercategory=supercategory,
+        )
+
+    @classmethod
+    def semantic_segmentation(
+        cls, name: Optional[str] = None, supercategory: Optional[str] = None
+    ) -> "UpdateCategoryInfo":
+        return cls(
+            name=name,
+            supercategory=supercategory,
+        )
+
+    @classmethod
+    def instance_segmentation(
+        cls, name: Optional[str] = None, supercategory: Optional[str] = None
+    ) -> "UpdateCategoryInfo":
+        return cls(
+            name=name,
+            supercategory=supercategory,
+        )
+
+    @classmethod
+    def keypoint_detection(
+        cls,
+        name: Optional[str] = None,
+        keypoints: Optional[list[str]] = None,
+        skeleton: Optional[list[list[int]]] = None,
+        supercategory: Optional[str] = None,
+    ) -> "UpdateCategoryInfo":
+        return cls(
+            name=name,
+            supercategory=supercategory,
+            keypoints=keypoints,
+            skeleton=skeleton,
+        )
+
+    @classmethod
+    def text_recognition(
+        cls, name: Optional[str] = None, supercategory: Optional[str] = None
+    ) -> "UpdateCategoryInfo":
+        return cls(
+            name=name,
+            supercategory=supercategory,
+        )
+
+    @classmethod
+    def regression(
+        cls, name: Optional[str] = None, supercategory: Optional[str] = None
+    ) -> "UpdateCategoryInfo":
+        return cls(
+            name=name,
+            supercategory=supercategory,
+        )

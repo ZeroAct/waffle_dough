@@ -1,7 +1,6 @@
 from typing import ClassVar, Optional, Union
 
-import numpy as np
-from pydantic import BaseModel, Field, field_validator, validator
+from pydantic import BaseModel, Field, field_validator
 
 from waffle_dough.field.base_field import BaseField
 from waffle_dough.field.validator.annotation_validator import (
@@ -16,9 +15,8 @@ from waffle_dough.field.validator.annotation_validator import (
     validate_segmentation,
     validate_value,
 )
-from waffle_dough.math.box import convert_box, get_box_area
+from waffle_dough.math.box import get_box_area
 from waffle_dough.math.segmentation import (
-    convert_segmentation,
     get_segmentation_area,
     get_segmentation_box,
 )
@@ -390,11 +388,10 @@ class UpdateAnnotationInfo(BaseModel):
     @classmethod
     def classification(
         cls,
-        category_id: str = None,
-        score: float = None,
+        category_id: Optional[str] = None,
+        score: Optional[float] = None,
     ) -> "UpdateAnnotationInfo":
         return cls(
-            task=TaskType.CLASSIFICATION,
             category_id=category_id,
             score=score,
         )
@@ -402,14 +399,13 @@ class UpdateAnnotationInfo(BaseModel):
     @classmethod
     def object_detection(
         cls,
-        category_id: str = None,
-        bbox: list[float] = None,
-        area: int = None,
-        iscrowd: int = None,
-        score: float = None,
+        category_id: Optional[str] = None,
+        bbox: Optional[list[float]] = None,
+        area: Optional[int] = None,
+        iscrowd: Optional[int] = None,
+        score: Optional[float] = None,
     ) -> "UpdateAnnotationInfo":
         return cls(
-            task=TaskType.OBJECT_DETECTION,
             category_id=category_id,
             bbox=bbox,
             area=area,
@@ -420,15 +416,14 @@ class UpdateAnnotationInfo(BaseModel):
     @classmethod
     def semantic_segmentation(
         cls,
-        category_id: str = None,
-        segmentation: Union[list[list[float]], dict] = None,
-        bbox: list[float] = None,
-        area: int = None,
-        iscrowd: int = None,
-        score: float = None,
+        category_id: Optional[str] = None,
+        segmentation: Optional[Union[list[list[float]], dict]] = None,
+        bbox: Optional[list[float]] = None,
+        area: Optional[int] = None,
+        iscrowd: Optional[int] = None,
+        score: Optional[float] = None,
     ) -> "UpdateAnnotationInfo":
         return cls(
-            task=TaskType.SEMANTIC_SEGMENTATION,
             category_id=category_id,
             segmentation=segmentation,
             bbox=bbox,
@@ -440,15 +435,14 @@ class UpdateAnnotationInfo(BaseModel):
     @classmethod
     def instance_segmentation(
         cls,
-        category_id: str = None,
-        segmentation: Union[list[list[float]], dict] = None,
-        bbox: list[float] = None,
-        area: int = None,
-        iscrowd: int = None,
-        score: float = None,
+        category_id: Optional[str] = None,
+        segmentation: Optional[Union[list[list[float]], dict]] = None,
+        bbox: Optional[list[float]] = None,
+        area: Optional[int] = None,
+        iscrowd: Optional[int] = None,
+        score: Optional[float] = None,
     ) -> "UpdateAnnotationInfo":
         return cls(
-            task=TaskType.INSTANCE_SEGMENTATION,
             category_id=category_id,
             segmentation=segmentation,
             bbox=bbox,
@@ -460,17 +454,16 @@ class UpdateAnnotationInfo(BaseModel):
     @classmethod
     def keypoint_detection(
         cls,
-        category_id: str = None,
-        keypoints: list[float] = None,
-        bbox: list[float] = None,
-        num_keypoints: int = None,
-        area: int = None,
-        segmentation: list[list[float]] = None,
-        iscrowd: int = None,
-        score: list[float] = None,
+        category_id: Optional[str] = None,
+        keypoints: Optional[list[float]] = None,
+        bbox: Optional[list[float]] = None,
+        num_keypoints: Optional[int] = None,
+        area: Optional[int] = None,
+        segmentation: Optional[list[list[float]]] = None,
+        iscrowd: Optional[int] = None,
+        score: Optional[list[float]] = None,
     ) -> "UpdateAnnotationInfo":
         return cls(
-            task=TaskType.KEYPOINT_DETECTION,
             category_id=category_id,
             keypoints=keypoints,
             bbox=bbox,
@@ -484,11 +477,10 @@ class UpdateAnnotationInfo(BaseModel):
     @classmethod
     def regression(
         cls,
-        category_id: str = None,
-        value: float = None,
+        category_id: Optional[str] = None,
+        value: Optional[float] = None,
     ) -> "UpdateAnnotationInfo":
         return cls(
-            task=TaskType.REGRESSION,
             category_id=category_id,
             value=value,
         )
@@ -496,12 +488,11 @@ class UpdateAnnotationInfo(BaseModel):
     @classmethod
     def text_recognition(
         cls,
-        category_id: str = None,
-        caption: str = None,
-        score: float = None,
+        category_id: Optional[str] = None,
+        caption: Optional[str] = None,
+        score: Optional[float] = None,
     ) -> "UpdateAnnotationInfo":
         return cls(
-            task=TaskType.TEXT_RECOGNITION,
             category_id=category_id,
             caption=caption,
             score=score,

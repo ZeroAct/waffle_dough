@@ -30,9 +30,7 @@ class DatabaseService:
         self.Session = create_session(db_url)
         self.image_directory = Path(image_directory)
 
-        self._sync_image_directory()
-
-    def _sync_image_directory(self) -> None:
+    def sync_image_directory(self) -> None:
         self.image_directory.mkdir(parents=True, exist_ok=True)
 
         real_image_file_names = list(
@@ -43,19 +41,11 @@ class DatabaseService:
         )
         db_image_file_names = list(map(lambda image: image.file_name, self.get_images()))
 
-        missing_in_file_system = list(set(db_image_file_names) - set(real_image_file_names))
         missing_in_database = list(set(real_image_file_names) - set(db_image_file_names))
-
         if missing_in_database:
             logger.info(
                 f"Found {len(missing_in_database)} images missing in database. It will be added to database."
             )
-
-        if missing_in_file_system:
-            logger.info(
-                f"Found {len(missing_in_file_system)} images missing in file system. It will be removed from database."
-            )
-
         for image_file_name in missing_in_database:
             image = Image.load(Path(self.image_directory, image_file_name))
             self.add_image(
@@ -66,6 +56,11 @@ class DatabaseService:
                 )
             )
 
+        missing_in_file_system = list(set(db_image_file_names) - set(real_image_file_names))
+        if missing_in_file_system:
+            logger.info(
+                f"Found {len(missing_in_file_system)} images missing in file system. It will be removed from database."
+            )
         for image_file_name in missing_in_file_system:
             db_images = self.get_images(filter_by={"file_name": image_file_name})
             if len(db_images) > 0:

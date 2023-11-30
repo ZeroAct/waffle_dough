@@ -48,10 +48,6 @@ class AnnotationRepository(CRUDBase[Annotation, AnnotationInfo, UpdateAnnotation
             category = category_repository.get(db, obj_in.category_id)
             if category is None:
                 raise ValueError(f"Category with id {obj_in.category_id} not found")
-            if category.task != obj_in.task:
-                raise ValueError(
-                    f"Category task {category.task} and annotation task {obj_in.task} mismatch"
-                )
 
         db.add(obj)
         self.commit(db)
