@@ -9,12 +9,11 @@ class Image(Base):
 
     id = Column(String, primary_key=True)
     task = Column(String)
-    file_name = Column(String, unique=True)
+    ext = Column(String)
     width = Column(Integer)
     height = Column(Integer)
     original_file_name = Column(String)
     date_captured = Column(String)
-    labeled = Column(Boolean)
     split = Column(String)
 
     annotations = relationship("Annotation", back_populates="image", cascade="all, delete-orphan")

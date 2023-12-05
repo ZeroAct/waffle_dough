@@ -385,6 +385,31 @@ class UpdateAnnotationInfo(BaseModel):
     def check_is_prediction(cls, v):
         return validate_is_prediction(v)
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.set_default_values()
+
+    def set_default_values(self):
+        # init default values
+        if self.bbox is None:
+            if self.segmentation is not None:
+                self.bbox = get_segmentation_box(self.segmentation, SegmentationType.POLYGON)
+
+        if self.area is None:
+            if self.segmentation is not None:
+                self.area = get_segmentation_area(self.segmentation, SegmentationType.POLYGON)
+            elif self.bbox is not None:
+                self.area = get_box_area(self.bbox, BoxType.XYWH)
+
+        if self.iscrowd is None and self.bbox is not None:
+            self.iscrowd = 0
+
+        if self.num_keypoints is None and self.keypoints is not None:
+            self.num_keypoints = len(self.keypoints) // 3
+
+        if self.score is not None:
+            self.is_prediction = True
+
     @classmethod
     def classification(
         cls,

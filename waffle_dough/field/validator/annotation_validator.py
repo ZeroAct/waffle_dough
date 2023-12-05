@@ -19,7 +19,7 @@ def validate_bbox(v: list[float], box_type: Union[str, BoxType] = BoxType.XYWH) 
 
 
 def validate_segmentation(
-    v: Union[list[list[float]], np.ndarray],
+    v: Union[dict, list[list[float]], np.ndarray],
 ) -> Union[list[list[float]], np.ndarray]:
     if v:
         if isinstance(v, dict):

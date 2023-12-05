@@ -2,7 +2,8 @@ import logging
 from pathlib import Path
 from typing import Any, List, Optional, Tuple, Union
 
-from waffle_utils.file import search
+import numpy as np
+from waffle_utils.file import io, search
 
 from waffle_dough.field import (
     AnnotationInfo,
@@ -30,52 +31,17 @@ class DatabaseService:
         self.Session = create_session(db_url)
         self.image_directory = Path(image_directory)
 
-    def sync_image_directory(self) -> None:
-        self.image_directory.mkdir(parents=True, exist_ok=True)
-
-        real_image_file_names = list(
-            map(
-                lambda image_path: str(Path(image_path).relative_to(self.image_directory)),
-                search.get_image_files(self.image_directory, recursive=True),
-            )
-        )
-        db_image_file_names = list(map(lambda image: image.file_name, self.get_images()))
-
-        missing_in_database = list(set(real_image_file_names) - set(db_image_file_names))
-        if missing_in_database:
-            logger.info(
-                f"Found {len(missing_in_database)} images missing in database. It will be added to database."
-            )
-        for image_file_name in missing_in_database:
-            image = Image.load(Path(self.image_directory, image_file_name))
-            self.add_image(
-                ImageInfo(
-                    file_name=image_file_name,
-                    width=image.width,
-                    height=image.height,
-                )
-            )
-
-        missing_in_file_system = list(set(db_image_file_names) - set(real_image_file_names))
-        if missing_in_file_system:
-            logger.info(
-                f"Found {len(missing_in_file_system)} images missing in file system. It will be removed from database."
-            )
-        for image_file_name in missing_in_file_system:
-            db_images = self.get_images(filter_by={"file_name": image_file_name})
-            if len(db_images) > 0:
-                for image in db_images:
-                    self.delete_image(image.id)
-
     # Create
-    def add_image(self, image_info: ImageInfo) -> ImageInfo:
-        if not Path(self.image_directory, image_info.file_name).exists():
-            raise FileNotFoundError(f"image file does not exist: {image_info.file_name}")
-
+    def add_image(self, image: str, image_info: ImageInfo) -> ImageInfo:
         with self.Session() as session:
-            image = image_repository.create(session, image_info)
+            io.copy_file(image, self.get_image_path(image_info), create_directory=True)
+            try:
+                image_info = image_repository.create(session, image_info)
+            except Exception as e:
+                io.remove_file(self.get_image_path(image_info))
+                raise e
 
-        return ImageInfo.model_validate(image, from_attributes=True)
+        return ImageInfo.model_validate(image_info, from_attributes=True)
 
     def add_category(self, category_info: CategoryInfo) -> CategoryInfo:
         with self.Session() as session:
@@ -98,6 +64,9 @@ class DatabaseService:
             raise ValueError(f"image does not exist: {image_id}")
 
         return ImageInfo.model_validate(image, from_attributes=True)
+
+    def get_image_path(self, image_info: ImageInfo) -> Path:
+        return Path(self.image_directory, f"{image_info.id}{image_info.ext}")
 
     def get_category(self, category_id: str) -> CategoryInfo:
         with self.Session() as session:
@@ -272,14 +241,16 @@ class DatabaseService:
     def get_annotation_count(self) -> int:
         return self._get_count(annotation_repository)
 
-    def get_image_by_file_name(self, file_name: str) -> ImageInfo:
+    def get_image_by_original_file_name(self, original_file_name: str) -> ImageInfo:
         with self.Session() as session:
-            image = image_repository.get_multi(session, filter_by={"file_name": file_name})
+            image = image_repository.get_multi(
+                session, filter_by={"original_file_name": original_file_name}
+            )
 
         if len(image) == 0:
-            raise ValueError(f"image does not exist: {file_name}")
+            raise ValueError(f"image does not exist: {original_file_name}")
         elif len(image) > 1:
-            raise ValueError(f"multiple images exist: {file_name}")
+            raise ValueError(f"multiple images exist: {original_file_name}")
 
         return ImageInfo.model_validate(image[0], from_attributes=True)
 
@@ -360,9 +331,11 @@ class DatabaseService:
     # Delete
     def delete_image(self, image_id: str) -> None:
         with self.Session() as session:
-            image = image_repository.remove(session, image_id)
+            image_info = image_repository.remove(session, image_id)
 
-        Path(self.image_directory, image.file_name).unlink(missing_ok=True)
+        image_path = self.get_image_path(image_info)
+        if Path(image_path).exists():
+            io.remove_file(image_path)
 
     def delete_category(self, category_id: str) -> None:
         with self.Session() as session:

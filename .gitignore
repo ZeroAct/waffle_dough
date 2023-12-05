@@ -138,7 +138,16 @@ runs/
 .vscode/
 mlruns/
 *.log.*
+*.jpg
+*.png
+*.jpeg
+*.svg
+*.gif
+*.bmp
+*.tif
 
+*.db
+*.sqlite
 *.pt
 *.pth
 debug.py

@@ -59,7 +59,7 @@ class BaseField(BaseModel):
         d1 = self.to_dict()
 
         if isinstance(__value, dict):
-            d2 = __value
+            d2 = __value.copy()
         elif isinstance(__value, self.__class__):
             d2 = __value.to_dict()
         else:
@@ -69,6 +69,9 @@ class BaseField(BaseModel):
         d2.pop("id")
 
         return d1 == d2
+
+    def __ne__(self, __value: object) -> bool:
+        return not self.__eq__(__value)
 
     def to_dict(self) -> dict:
         """Convert to dict.
@@ -94,6 +97,7 @@ class BaseField(BaseModel):
         Returns:
             BaseField: field.
         """
+        d = d.copy()
 
         if hasattr(d, "task") and task != d["task"]:
             raise ValueError(
@@ -101,4 +105,6 @@ class BaseField(BaseModel):
             )
         else:
             d["task"] = task
-        return cls(**d)
+
+        task = d.pop("task")
+        return getattr(cls, task.lower())(**d)

@@ -19,7 +19,6 @@ def _test_category_info(task, kwargs, expected_output):
         assert category_1 == category_2
 
         kwargs.update({"name": kwargs["name"] + "2"})
-        kwargs.pop("task")
         category_3 = new_function(**kwargs)
         assert category_1 != category_3
 

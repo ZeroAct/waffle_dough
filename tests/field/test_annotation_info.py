@@ -18,7 +18,6 @@ def _test_annotation_info(task, kwargs, expected_output):
         annotation_2 = AnnotationInfo.from_dict(task=task, d=kwargs)
         assert annotation_1 == annotation_2
 
-        kwargs.pop("task")
         kwargs.update({"image_id": annotation_1.image_id + "2"})
         annotation_3 = new_function(**kwargs)
         assert annotation_1 != annotation_3

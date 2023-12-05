@@ -28,16 +28,17 @@ def gen_dump_image(image_path):
 
 
 def add_sample_image(database_service, tmpdir):
-    file_name = f"image_{len(tmpdir.listdir())}.png"
-    image_path = tmpdir / file_name
+    original_file_name = f"image_{len(tmpdir.listdir())}.png"
+    image_path = tmpdir / original_file_name
     image = gen_dump_image(image_path)
 
     image_info = database_service.add_image(
-        ImageInfo(
-            file_name=file_name,
+        image_path,
+        ImageInfo.agnostic(
+            original_file_name=original_file_name,
             width=image.shape[1],
             height=image.shape[0],
-        )
+        ),
     )
     return image_info
 
@@ -56,13 +57,13 @@ def test_image_crud(tmpdir):
 
     image_info = add_sample_image(database_service, tmpdir)
     assert database_service.get_image_count() == 1
-    file_name = image_info.file_name
+    original_file_name = image_info.original_file_name
 
     image_info = database_service.get_image(image_info.id)
-    assert image_info.file_name == file_name
+    assert image_info.original_file_name == original_file_name
 
-    image_info = database_service.get_image_by_file_name(file_name)
-    assert image_info.file_name == file_name
+    image_info = database_service.get_image_by_original_file_name(original_file_name)
+    assert image_info.original_file_name == original_file_name
 
     image_info = database_service.update_image(
         image_info.id,
@@ -170,7 +171,7 @@ def test_advance_read(tmpdir):
     assert len(annotation_infos) == 2
 
     # Test get images
-    image_info = database_service.get_image_by_file_name(image_info1.file_name)
+    image_info = database_service.get_image_by_original_file_name(image_info1.original_file_name)
     assert image_info.id == image_info1.id
 
     image_infos = database_service.get_images_by_category_id(category_info1.id)

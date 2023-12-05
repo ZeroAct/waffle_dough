@@ -36,8 +36,8 @@ def db():
 def test_crud(db):
     # Create
     ## create image
-    image_info = ImageInfo(
-        file_name="test.jpg",
+    image_info = ImageInfo.agnostic(
+        original_file_name="test.jpg",
         width=100,
         height=100,
     )
@@ -94,11 +94,11 @@ def test_crud(db):
     # Update
     ## update image
     image = image_repository.create(db, image_info)
-    assert image.labeled == False
+    assert image.split == "unset"
 
-    update_image_info = UpdateImageInfo(labeled=True)
+    update_image_info = UpdateImageInfo(split="train")
     image = image_repository.update(db, image.id, update_image_info)
-    assert image.labeled == True
+    assert image.split == "train"
 
     ## update category
     update_category_info = UpdateCategoryInfo(name="test2")
