@@ -1,25 +1,30 @@
+from waffle_dough.exception import FieldMissingError, FieldValidationError
+
+
 def validate_keypoints(v: list[str]) -> list[str]:
     if v is not None:
         for keypoint in v:
             if not isinstance(keypoint, str):
-                raise ValueError(f"each keypoint must be string: {keypoint}")
+                raise FieldValidationError(f"each keypoint must be string: {keypoint}")
     return v
 
 
 def validate_skeleton(v: list[list[int]], keypoints: list[str]) -> list[list[int]]:
     if v is not None:
         if keypoints is None:
-            raise ValueError("keypoints must be given when skeleton is given")
+            raise FieldMissingError("keypoints must be given when skeleton is given")
         for skeleton in v:
             if not isinstance(skeleton, list):
-                raise ValueError(f"each skeleton must be list: {skeleton}")
+                raise FieldValidationError(f"each skeleton must be list: {skeleton}")
             if len(skeleton) != 2:
-                raise ValueError(f"each skeleton must have 2 elements: {skeleton}")
+                raise FieldValidationError(f"each skeleton must have 2 elements: {skeleton}")
             for skeleton_element in skeleton:
                 if not isinstance(skeleton_element, int):
-                    raise ValueError(f"each skeleton element must be int: {skeleton_element}")
+                    raise FieldValidationError(
+                        f"each skeleton element must be int: {skeleton_element}"
+                    )
                 if skeleton_element < 0 or skeleton_element >= len(keypoints):
-                    raise ValueError(
+                    raise FieldValidationError(
                         f"each skeleton element must be in range of keypoints: {skeleton_element}"
                     )
     return v

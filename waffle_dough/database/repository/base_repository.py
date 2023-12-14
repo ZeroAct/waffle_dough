@@ -16,6 +16,7 @@ from sqlalchemy import orm
 from sqlalchemy.orm import Session
 
 from waffle_dough.database.model import Base
+from waffle_dough.exception.database_exception import *
 
 ModelType = TypeVar("ModelType", bound=Base)
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
@@ -112,7 +113,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         # obj_in_data = jsonable_encoder(db_obj)
         obj = db.get(self.model, id)
         if obj is None:
-            raise ValueError(f"Object with id {id} not found")
+            raise DatabaseNotFoundError(f"Object with id {id} not found")
         obj_in_data = {col.name: str(getattr(obj, col.name)) for col in obj.__table__.columns}
         if isinstance(obj_in, dict):
             update_data = obj_in
@@ -129,7 +130,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def remove(self, db: Session, id: Any) -> ModelType:
         obj = db.get(self.model, id)
         if obj is None:
-            raise ValueError(f"Object with id {id} not found")
+            raise DatabaseNotFoundError(f"Object with id {id} not found")
         db.delete(obj)
         self.commit(db)
         return obj

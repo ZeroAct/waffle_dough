@@ -211,3 +211,26 @@ def test_advance_read(tmpdir):
     assert database_service.get_category_count() == 1
     assert database_service.get_annotation_count() == 1
     assert database_service.get_image_count() == 3
+
+    # get by split
+    image_info = database_service.get_image(image_info1.id)
+    database_service.update_image(
+        image_info.id,
+        UpdateImageInfo(
+            split="train",
+        ),
+    )
+
+    image_info = database_service.get_image(image_info2.id)
+    database_service.update_image(
+        image_info.id,
+        UpdateImageInfo(
+            split="validation",
+        ),
+    )
+
+    images = database_service.get_images(split_type="train")
+    assert len(images) == 1
+
+    images = database_service.get_images(split_type="validation")
+    assert len(images) == 1

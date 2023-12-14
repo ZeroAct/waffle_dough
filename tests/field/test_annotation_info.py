@@ -1,5 +1,6 @@
 import pytest
 
+from waffle_dough.exception import *
 from waffle_dough.field import AnnotationInfo
 from waffle_dough.type import TaskType
 
@@ -35,7 +36,6 @@ def _test_annotation_info(task, kwargs, expected_output):
                 "task": "classification",
                 "image_id": "test",
                 "category_id": "test",
-                "is_prediction": False,
             },
         ),
         (
@@ -46,7 +46,7 @@ def _test_annotation_info(task, kwargs, expected_output):
         (
             TaskType.CLASSIFICATION,
             {"image_id": None, "category_id": "test"},
-            ValueError,
+            FieldMissingError,
         ),
     ],
 )
@@ -67,7 +67,18 @@ def test_classification_annotation_info(task, kwargs, expected_output):
                 "bbox": [0, 0, 1, 1],
                 "area": 1,
                 "iscrowd": 0,
-                "is_prediction": False,
+            },
+        ),
+        (
+            TaskType.OBJECT_DETECTION,
+            {"image_id": "test", "category_id": "test", "bbox": [0, 0, 1, 1]},
+            {
+                "task": "object_detection",
+                "image_id": "test",
+                "category_id": "test",
+                "bbox": [0, 0, 1, 1],
+                "area": 1,
+                "iscrowd": 0,
             },
         ),
         (
@@ -78,7 +89,7 @@ def test_classification_annotation_info(task, kwargs, expected_output):
         (
             TaskType.OBJECT_DETECTION,
             {"image_id": None, "category_id": "test", "bbox": [0, 0, 1, 1]},
-            ValueError,
+            FieldMissingError,
         ),
         (
             TaskType.OBJECT_DETECTION,
@@ -88,17 +99,17 @@ def test_classification_annotation_info(task, kwargs, expected_output):
         (
             TaskType.OBJECT_DETECTION,
             {"image_id": "test", "category_id": "test", "bbox": [0, 0, 1]},
-            ValueError,
+            FieldValidationError,
         ),
         (
             TaskType.OBJECT_DETECTION,
             {"image_id": "test", "category_id": "test", "bbox": [0, 0, 1, 1, 1]},
-            ValueError,
+            FieldValidationError,
         ),
         (
             TaskType.OBJECT_DETECTION,
             {"image_id": "test", "category_id": "test", "bbox": [0, 0, 1, 1], "area": "asdf"},
-            ValueError,
+            FieldValidationError,
         ),
     ],
 )
@@ -120,7 +131,6 @@ def test_object_detection_annotation_info(task, kwargs, expected_output):
                 "segmentation": [[0, 0, 1, 0, 1, 1, 0, 1]],
                 "area": 1,
                 "iscrowd": 0,
-                "is_prediction": False,
             },
         ),
         (
@@ -131,7 +141,7 @@ def test_object_detection_annotation_info(task, kwargs, expected_output):
         (
             TaskType.SEMANTIC_SEGMENTATION,
             {"image_id": None, "category_id": "test", "segmentation": [[0, 0, 1, 0, 1, 1, 0, 1]]},
-            ValueError,
+            FieldMissingError,
         ),
         (
             TaskType.SEMANTIC_SEGMENTATION,
@@ -141,7 +151,7 @@ def test_object_detection_annotation_info(task, kwargs, expected_output):
         (
             TaskType.SEMANTIC_SEGMENTATION,
             {"image_id": "test", "category_id": "test", "segmentation": [[0, 0, 1, 0, 1, 1, 0]]},
-            ValueError,
+            FieldValidationError,
         ),
         (
             TaskType.SEMANTIC_SEGMENTATION,
@@ -150,7 +160,7 @@ def test_object_detection_annotation_info(task, kwargs, expected_output):
                 "category_id": "test",
                 "segmentation": [[0, 0, 1, 0, 1, 1, 0, 1, 1]],
             },
-            ValueError,
+            FieldValidationError,
         ),
         (
             TaskType.SEMANTIC_SEGMENTATION,
@@ -160,7 +170,7 @@ def test_object_detection_annotation_info(task, kwargs, expected_output):
                 "segmentation": [[0, 0, 1, 0, 1, 1, 0, 1]],
                 "area": "asdf",
             },
-            ValueError,
+            FieldValidationError,
         ),
     ],
 )
@@ -182,7 +192,6 @@ def test_semantic_segmentation_annotation_info(task, kwargs, expected_output):
                 "segmentation": [[0, 0, 1, 0, 1, 1, 0, 1]],
                 "area": 1,
                 "iscrowd": 0,
-                "is_prediction": False,
             },
         ),
         (
@@ -202,7 +211,6 @@ def test_semantic_segmentation_annotation_info(task, kwargs, expected_output):
                 "area": 1,
                 "iscrowd": 0,
                 "score": 0.5,
-                "is_prediction": True,
             },
         ),
         (
@@ -213,7 +221,7 @@ def test_semantic_segmentation_annotation_info(task, kwargs, expected_output):
         (
             TaskType.INSTANCE_SEGMENTATION,
             {"image_id": None, "category_id": "test", "segmentation": [[0, 0, 1, 0, 1, 1, 0, 1]]},
-            ValueError,
+            FieldMissingError,
         ),
         (
             TaskType.INSTANCE_SEGMENTATION,
@@ -223,7 +231,7 @@ def test_semantic_segmentation_annotation_info(task, kwargs, expected_output):
         (
             TaskType.INSTANCE_SEGMENTATION,
             {"image_id": "test", "category_id": "test", "segmentation": [[0, 0, 1, 0, 1, 1, 0]]},
-            ValueError,
+            FieldValidationError,
         ),
         (
             TaskType.INSTANCE_SEGMENTATION,
@@ -232,7 +240,7 @@ def test_semantic_segmentation_annotation_info(task, kwargs, expected_output):
                 "category_id": "test",
                 "segmentation": [[0, 0, 1, 0, 1, 1, 0, 1, 1]],
             },
-            ValueError,
+            FieldValidationError,
         ),
         (
             TaskType.INSTANCE_SEGMENTATION,
@@ -242,7 +250,7 @@ def test_semantic_segmentation_annotation_info(task, kwargs, expected_output):
                 "segmentation": [[0, 0, 1, 0, 1, 1, 0, 1]],
                 "area": "asdf",
             },
-            ValueError,
+            FieldValidationError,
         ),
     ],
 )

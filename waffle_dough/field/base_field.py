@@ -6,6 +6,12 @@ import pydantic_core
 from pydantic import BaseModel, Field, field_validator
 from waffle_utils.file import io
 
+from waffle_dough.exception import (
+    FieldException,
+    FieldMissingError,
+    FieldTaskError,
+    FieldValidationError,
+)
 from waffle_dough.type import TaskType
 
 
@@ -21,7 +27,7 @@ class BaseField(BaseModel):
         except pydantic_core.ValidationError as e:
             task = kwargs.get("task", None)
             if task is None:
-                raise ValueError(f"task must be given: {task}")
+                raise FieldMissingError("task must be given")
 
             missing_keys = [
                 key
@@ -38,21 +44,25 @@ class BaseField(BaseModel):
             if len(missing_keys) > 0:
                 msg += f"Missing required fields: {missing_keys}\n"
 
-            msg += f"Given fields:\n"
-            for key, f in self.model_fields.items():
-                msg += f" - {key}[{f.annotation}]: {kwargs.get(key, None)}\n"
+                msg += f"Given fields:\n"
+                for key, f in self.model_fields.items():
+                    msg += f" - {key}[{f.annotation}]: {kwargs.get(key, None)}\n"
 
-            raise ValueError(msg)
+                raise FieldMissingError(msg)
+            else:
+                raise FieldValidationError(e)
+        except Exception as e:
+            raise e
 
     @field_validator("task")
     def _check_task_before(cls, v, values):
         if v not in list(TaskType):
-            raise ValueError(f"task must be one of {list(TaskType)}: {v}")
+            raise FieldTaskError(f"task must be one of {list(TaskType)}: {v}")
         return v
 
     def __new__(cls, *args, **kwargs):
         if cls is BaseField:
-            raise TypeError("BaseField cannot be instantiated")
+            raise FieldException("BaseField cannot be instantiated")
         return super().__new__(cls)
 
     def __eq__(self, __value: object) -> bool:
@@ -100,7 +110,7 @@ class BaseField(BaseModel):
         d = d.copy()
 
         if hasattr(d, "task") and task != d["task"]:
-            raise ValueError(
+            raise FieldTaskError(
                 f"Given task type is not matched with the task type of the given dict: {task} != {d['task']}"
             )
         else:

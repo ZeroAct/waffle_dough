@@ -5,6 +5,7 @@ from waffle_dough.database.repository import (
     category_repository,
     image_repository,
 )
+from waffle_dough.exception.database_exception import *
 from waffle_dough.field import (
     AnnotationInfo,
     CategoryInfo,
@@ -64,15 +65,23 @@ def test_crud(db):
         image_id="some_random_non_existing_id",
         category_id="some_random_non_existing_id",
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(DatabaseNotFoundError):
         annotation_repository.create(db, annotation_info)
 
     annotation_info = AnnotationInfo.object_detection(
         image_id="some_random_non_existing_id",
         category_id="some_random_non_existing_id",
-        bbox=[0, 0, 100, 100],
+        bbox=[0, 0, 1, 1],
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(DatabaseNotFoundError):
+        annotation_repository.create(db, annotation_info)
+
+    annotation_info = AnnotationInfo.object_detection(
+        image_id=image.id,
+        category_id=category.id,
+        bbox=[0, 0, 1, 1],
+    )
+    with pytest.raises(DatabaseConstraintError):
         annotation_repository.create(db, annotation_info)
 
     # Cascade delete

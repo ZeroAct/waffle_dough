@@ -20,7 +20,6 @@ class Annotation(Base):
     value = Column(Double)
     iscrowd = Column(Integer)
     score = Column(Double)
-    is_prediction = Column(Boolean)
 
     image = relationship("Image", back_populates="annotations")
     category = relationship("Category", back_populates="annotations")

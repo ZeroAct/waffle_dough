@@ -1,5 +1,6 @@
 import pytest
 
+from waffle_dough.exception import *
 from waffle_dough.field import ImageInfo
 from waffle_dough.type import TaskType
 
@@ -88,12 +89,12 @@ def _test_image_info(task, kwargs, expected_output):
         (
             TaskType.AGNOSTIC,
             {"original_file_name": "test.jpg", "width": 0, "height": 100},
-            ValueError,
+            FieldValidationError,
         ),
         (
             TaskType.AGNOSTIC,
             {"original_file_name": "test.jpg", "width": 100, "height": 0},
-            ValueError,
+            FieldValidationError,
         ),
     ],
 )

@@ -1,5 +1,6 @@
 import pytest
 
+from waffle_dough.exception import *
 from waffle_dough.field import CategoryInfo
 from waffle_dough.type import TaskType
 
@@ -43,7 +44,7 @@ def _test_category_info(task, kwargs, expected_output):
         (
             TaskType.CLASSIFICATION,
             {"name": None, "supercategory": "test"},
-            ValueError,
+            FieldMissingError,
         ),
     ],
 )
@@ -71,7 +72,7 @@ def test_classification_category_info(task, kwargs, expected_output):
         (
             TaskType.OBJECT_DETECTION,
             {"name": None, "supercategory": "test"},
-            ValueError,
+            FieldMissingError,
         ),
     ],
 )
@@ -99,7 +100,7 @@ def test_object_detection_category_info(task, kwargs, expected_output):
         (
             TaskType.SEMANTIC_SEGMENTATION,
             {"name": None, "supercategory": "test"},
-            ValueError,
+            FieldMissingError,
         ),
     ],
 )
@@ -127,7 +128,7 @@ def test_semantic_segmentation_category_info(task, kwargs, expected_output):
         (
             TaskType.INSTANCE_SEGMENTATION,
             {"name": None, "supercategory": "test"},
-            ValueError,
+            FieldMissingError,
         ),
     ],
 )
@@ -162,7 +163,7 @@ def test_instance_segmentation_category_info(task, kwargs, expected_output):
                 "keypoints": ["test1", "test2"],
                 "skeleton": [[0, 1, 2]],
             },
-            ValueError,
+            FieldValidationError,
         ),
         (
             TaskType.KEYPOINT_DETECTION,
@@ -172,7 +173,7 @@ def test_instance_segmentation_category_info(task, kwargs, expected_output):
                 "keypoints": ["test1", "test2"],
                 "skeleton": [[0, 1], [1, 2]],
             },
-            ValueError,
+            FieldValidationError,
         ),
         (
             TaskType.KEYPOINT_DETECTION,
@@ -187,7 +188,7 @@ def test_instance_segmentation_category_info(task, kwargs, expected_output):
                 "keypoints": ["test1", "test2"],
                 "skeleton": [[0, 1]],
             },
-            ValueError,
+            FieldMissingError,
         ),
     ],
 )
@@ -215,7 +216,7 @@ def test_keypoint_detection_category_info(task, kwargs, expected_output):
         (
             TaskType.TEXT_RECOGNITION,
             {"name": None, "supercategory": "test"},
-            ValueError,
+            FieldMissingError,
         ),
     ],
 )
@@ -243,7 +244,7 @@ def test_text_recognition_category_info(task, kwargs, expected_output):
         (
             TaskType.REGRESSION,
             {"name": None, "supercategory": "test"},
-            ValueError,
+            FieldMissingError,
         ),
     ],
 )

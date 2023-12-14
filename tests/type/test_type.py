@@ -1,7 +1,6 @@
 import pytest
 
 from waffle_dough.type import DataType, TaskType
-from waffle_dough.type.base_type import BaseType
 
 
 def _type_check(type_member, test_value):
@@ -19,17 +18,6 @@ def _type_check(type_member, test_value):
 def _member_check(type_class, test_value):
     assert test_value.lower() in list(type_class)
     assert test_value.upper() in list(type_class)
-
-
-def test_base_type():
-    class TestType(BaseType):
-        TEST = "test"
-        TEST2 = "test2"
-
-    _type_check(TestType.TEST, "test")
-    _type_check(TestType.TEST2, "test2")
-    _member_check(TestType, "test")
-    _member_check(TestType, "test2")
 
 
 @pytest.mark.parametrize("data_type, test_value", [[DataType.COCO, "coco"], [DataType.YOLO, "yolo"]])

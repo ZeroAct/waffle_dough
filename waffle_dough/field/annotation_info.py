@@ -7,7 +7,6 @@ from waffle_dough.field.validator.annotation_validator import (
     validate_area,
     validate_bbox,
     validate_caption,
-    validate_is_prediction,
     validate_iscrowd,
     validate_keypoints,
     validate_num_keypoints,
@@ -35,7 +34,6 @@ class AnnotationInfo(BaseField):
     value: Optional[float] = Field(None)
     iscrowd: Optional[int] = Field(None)
     score: Optional[float] = Field(None)
-    is_prediction: Optional[bool] = Field(False)
 
     extra_required_fields: ClassVar[dict[TaskType, list[str]]] = {
         TaskType.CLASSIFICATION: ["image_id", "category_id"],
@@ -83,10 +81,6 @@ class AnnotationInfo(BaseField):
     def check_score(cls, v):
         return validate_score(v)
 
-    @field_validator("is_prediction")
-    def check_is_prediction(cls, v):
-        return validate_is_prediction(v)
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.set_default_values()
@@ -108,9 +102,6 @@ class AnnotationInfo(BaseField):
 
         if self.num_keypoints is None and self.keypoints is not None:
             self.num_keypoints = len(self.keypoints) // 3
-
-        if self.score is not None:
-            self.is_prediction = True
 
     @classmethod
     def classification(
@@ -343,7 +334,6 @@ class UpdateAnnotationInfo(BaseModel):
     value: Optional[float] = Field(None)
     iscrowd: Optional[int] = Field(None)
     score: Optional[float] = Field(None)
-    is_prediction: Optional[bool] = Field(None)
 
     @field_validator("bbox")
     def check_bbox(cls, v):
@@ -381,10 +371,6 @@ class UpdateAnnotationInfo(BaseModel):
     def check_score(cls, v):
         return validate_score(v)
 
-    @field_validator("is_prediction")
-    def check_is_prediction(cls, v):
-        return validate_is_prediction(v)
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.set_default_values()
@@ -406,9 +392,6 @@ class UpdateAnnotationInfo(BaseModel):
 
         if self.num_keypoints is None and self.keypoints is not None:
             self.num_keypoints = len(self.keypoints) // 3
-
-        if self.score is not None:
-            self.is_prediction = True
 
     @classmethod
     def classification(

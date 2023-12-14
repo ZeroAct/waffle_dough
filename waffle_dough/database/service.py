@@ -5,6 +5,7 @@ from typing import Any, List, Optional, Tuple, Union
 import numpy as np
 from waffle_utils.file import io, search
 
+from waffle_dough.exception.database_exception import *
 from waffle_dough.field import (
     AnnotationInfo,
     CategoryInfo,
@@ -61,7 +62,7 @@ class DatabaseService:
             image = image_repository.get(session, image_id)
 
         if image is None:
-            raise ValueError(f"image does not exist: {image_id}")
+            raise DatabaseNotFoundError(f"image does not exist: {image_id}")
 
         return ImageInfo.model_validate(image, from_attributes=True)
 
@@ -73,7 +74,7 @@ class DatabaseService:
             category = category_repository.get(session, category_id)
 
         if category is None:
-            raise ValueError(f"category does not exist: {category_id}")
+            raise DatabaseNotFoundError(f"category does not exist: {category_id}")
 
         return CategoryInfo.model_validate(category, from_attributes=True)
 
@@ -82,7 +83,7 @@ class DatabaseService:
             annotation = annotation_repository.get(session, annotation_id)
 
         if annotation is None:
-            raise ValueError(f"annotation does not exist: {annotation_id}")
+            raise DatabaseNotFoundError(f"annotation does not exist: {annotation_id}")
 
         return AnnotationInfo.model_validate(annotation, from_attributes=True)
 
@@ -248,9 +249,9 @@ class DatabaseService:
             )
 
         if len(image) == 0:
-            raise ValueError(f"image does not exist: {original_file_name}")
+            raise DatabaseNotFoundError(f"image does not exist: {original_file_name}")
         elif len(image) > 1:
-            raise ValueError(f"multiple images exist: {original_file_name}")
+            raise DatabaseIntegrityError(f"multiple images exist: {original_file_name}")
 
         return ImageInfo.model_validate(image[0], from_attributes=True)
 
@@ -259,9 +260,9 @@ class DatabaseService:
             category = category_repository.get_multi(session, filter_by={"name": name})
 
         if len(category) == 0:
-            raise ValueError(f"category does not exist: {name}")
+            raise DatabaseNotFoundError(f"category does not exist: {name}")
         elif len(category) > 1:
-            raise ValueError(f"multiple categories exist: {name}")
+            raise DatabaseIntegrityError(f"multiple categories exist: {name}")
 
         return CategoryInfo.model_validate(category[0], from_attributes=True)
 
