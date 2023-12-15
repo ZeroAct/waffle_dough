@@ -1,7 +1,7 @@
-from waffle_utils.hook import BaseHook
+from waffle_utils.callback import BaseCallback
 
 
-class BaseAdapter(BaseHook):
+class BaseDatasetAdapterCallback(BaseCallback):
     def on_loop_start(self, total_steps: int):
         pass
 

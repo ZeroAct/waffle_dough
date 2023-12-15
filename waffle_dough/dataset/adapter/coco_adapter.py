@@ -18,10 +18,11 @@ class CocoAdapter(BaseAdapter):
         annotations: dict[str, AnnotationInfo] = None,
         categories: dict[str, CategoryInfo] = None,
         task: Union[str, TaskType] = TaskType.OBJECT_DETECTION,
+        callbacks: list[callable] = None,
         *args,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, callbacks=callbacks, **kwargs)
 
         self.images: dict[str, ImageInfo] = images or {}
         self.annotations: dict[str, AnnotationInfo] = annotations or {}
