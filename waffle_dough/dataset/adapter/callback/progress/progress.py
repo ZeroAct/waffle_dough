@@ -1,6 +1,6 @@
 import time
 
-from ..adapter import BaseDatasetAdapterCallback
+from ..adapter_callback import BaseDatasetAdapterCallback
 
 
 class DatasetAdapterProgressCallback(BaseDatasetAdapterCallback):
