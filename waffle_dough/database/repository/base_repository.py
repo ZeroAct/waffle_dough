@@ -130,7 +130,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def remove(self, db: Session, id: Any) -> ModelType:
         obj = db.get(self.model, id)
         if obj is None:
-            raise DatabaseNotFoundError(f"Object with id {id} not found")
+            raise DatabaseNotFoundError(f"[{self.__class__.__name__}] Object with id {id} not found")
         db.delete(obj)
         self.commit(db)
         return obj

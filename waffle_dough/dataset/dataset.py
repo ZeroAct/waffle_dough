@@ -39,6 +39,7 @@ from waffle_dough.field import (
     UpdateCategoryInfo,
     UpdateImageInfo,
 )
+from waffle_dough.image import io as image_io
 from waffle_dough.type import SplitType, TaskType
 
 
@@ -208,25 +209,65 @@ class WaffleDataset:
 
     # methods (CRUD)
     @update_dataset_decorator
-    def add_category(self, category_info: Union[CategoryInfo, list[CategoryInfo]]):
-        category_infos = category_info if isinstance(category_info, list) else [category_info]
+    def add_category(
+        self, category_info: Union[CategoryInfo, list[CategoryInfo], dict, list[dict]]
+    ) -> list[CategoryInfo]:
+        category_infos = []
+        for c in category_info if isinstance(category_info, list) else [category_info]:
+            if isinstance(c, dict):
+                c = CategoryInfo.from_dict(task=self.task, d=c)
+            if c.task != self.task:
+                raise DatasetTaskError(f"Invalid task: {c.task}")
+            category_infos.append(c)
+
         for category_info in category_infos:
             self.database_service.add_category(category_info)
 
-    @update_dataset_decorator
-    def add_image(self, image: Union[str, Path], image_info: Union[ImageInfo, list[ImageInfo]]):
-        images = image if isinstance(image, list) else [image]
-        image_infos = image_info if isinstance(image_info, list) else [image_info]
-        for image, image_info in zip(images, image_infos):
-            self.database_service.add_image(image, image_info)
+        return category_infos
 
     @update_dataset_decorator
-    def add_annotation(self, annotation_info: Union[AnnotationInfo, list[AnnotationInfo]]):
-        annotation_infos = (
-            annotation_info if isinstance(annotation_info, list) else [annotation_info]
-        )
+    def add_image(
+        self,
+        image: Union[str, Path],
+        # image_info: Union[ImageInfo, list[ImageInfo], dict, list[dict]] = None
+    ) -> list[ImageInfo]:
+        images = image if isinstance(image, list) else [image]
+        image_infos = []
+        for image in images:
+            img = image_io.cv2_imread(image)
+            image_infos.append(
+                ImageInfo(
+                    ext=Path(image).suffix,
+                    width=img.shape[1],
+                    height=img.shape[0],
+                    original_file_name=Path(image).name,
+                    task=TaskType.AGNOSTIC,
+                )
+            )
+
+        for image, image_info in zip(images, image_infos):
+            if isinstance(image_info, dict):
+                image_info = ImageInfo.from_dict(task=TaskType.AGNOSTIC, d=image_info)
+            self.database_service.add_image(image, image_info)
+
+        return image_infos
+
+    @update_dataset_decorator
+    def add_annotation(
+        self, annotation_info: Union[AnnotationInfo, list[AnnotationInfo], dict, list[dict]]
+    ) -> list[AnnotationInfo]:
+        annotation_infos = []
+        for a in annotation_info if isinstance(annotation_info, list) else [annotation_info]:
+            if isinstance(a, dict):
+                a = AnnotationInfo.from_dict(task=self.task, d=a)
+            if a.task != self.task:
+                raise DatasetTaskError(f"Invalid task: {a.task}")
+            annotation_infos.append(a)
+
         for annotation_info in annotation_infos:
             self.database_service.add_annotation(annotation_info)
+
+        return annotation_infos
 
     def get_image_dict(
         self,
@@ -316,7 +357,7 @@ class WaffleDataset:
 
     # methods (class methods)
     @classmethod
-    def get_dataset_list(cls, root_dir: str = None) -> list[str]:
+    def get_dataset_list(cls, task: Union[str, TaskType] = None, root_dir: str = None) -> list[str]:
         root_dir = cls.parse_root_dir(root_dir)
 
         dataset_list = []
@@ -328,7 +369,9 @@ class WaffleDataset:
                 continue
             dataset_info_file_path = dataset_dir / cls.DATASET_INFO_FILE_NAME
             if dataset_info_file_path.exists():
-                dataset_list.append(Path(dataset_dir).name)
+                dataset_info = DatasetInfo.from_dict(io.load_yaml(dataset_info_file_path))
+                if task is None or TaskType.from_str(task) == dataset_info.task:
+                    dataset_list.append(Path(dataset_dir).name)
         return dataset_list
 
     @classmethod
@@ -378,7 +421,13 @@ class WaffleDataset:
     ) -> "WaffleDataset":
         src_dataset = WaffleDataset.load(src_name, root_dir=root_dir)
         dst_dataset = WaffleDataset.new(dst_name, src_dataset.task, root_dir=root_dir)
-        io.copy_files_to_directory(src_dataset.dataset_dir, dst_dataset.dataset_dir)
+
+        try:
+            io.copy_files_to_directory(src_dataset.image_dir, dst_dataset.image_dir)
+        except FileNotFoundError:
+            pass
+        io.copy_file(src_dataset.database_file_path, dst_dataset.database_file_path)
+
         return dst_dataset
 
     @classmethod
