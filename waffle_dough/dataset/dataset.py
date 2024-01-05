@@ -19,17 +19,20 @@ Example:
     )
 
 """
+import logging
 import os
+import random
 from dataclasses import asdict, dataclass
 from functools import cached_property
 from pathlib import Path
 from typing import Union
 
 from waffle_utils.file import io
-from waffle_utils.logger import datetime_now
+from waffle_utils.logger import datetime_now, initialize_logger
 
 from waffle_dough.database.service import DatabaseService
 from waffle_dough.dataset.adapter import CocoAdapter
+from waffle_dough.dataset.util.iterator import Iterator
 from waffle_dough.exception.dataset_exception import *
 from waffle_dough.field import (
     AnnotationInfo,
@@ -41,6 +44,13 @@ from waffle_dough.field import (
 )
 from waffle_dough.image import io as image_io
 from waffle_dough.type import SplitType, TaskType
+
+initialize_logger(
+    console_level=os.environ.get("WAFFLE_DATASET_CONSOLE_LOG_LEVEL", "INFO"),
+    file_level=os.environ.get("WAFFLE_DATASET_FILE_LOG_LEVEL", "INFO"),
+    root_level=os.environ.get("WAFFLE_DATASET_ROOT_LOG_LEVEL", "INFO"),
+)
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -102,7 +112,7 @@ class WaffleDataset:
         self.create_dataset_info()
 
     def initialized(self) -> bool:
-        return self.dataset_info_file_path.exists()
+        return self.dataset_info_file.exists()
 
     def create_dataset_info(self) -> DatasetInfo:
         dataset_info = DatasetInfo(
@@ -112,17 +122,17 @@ class WaffleDataset:
             created_at=datetime_now(),
             updated_at=datetime_now(),
         )
-        io.save_yaml(dataset_info.to_dict(), self.dataset_info_file_path)
+        io.save_yaml(dataset_info.to_dict(), self.dataset_info_file)
         return dataset_info
 
     def get_dataset_info(self) -> DatasetInfo:
-        return DatasetInfo.from_dict(io.load_yaml(self.dataset_info_file_path))
+        return DatasetInfo.from_dict(io.load_yaml(self.dataset_info_file))
 
     def update_dataset_info(self) -> DatasetInfo:
         dataset_info = self.get_dataset_info()
         dataset_info.categories = [category.to_dict() for category in self.categories]
         dataset_info.updated_at = datetime_now()
-        io.save_yaml(dataset_info.to_dict(), self.dataset_info_file_path)
+        io.save_yaml(dataset_info.to_dict(), self.dataset_info_file)
         return dataset_info
 
     def update_dataset_decorator(func):
@@ -164,7 +174,7 @@ class WaffleDataset:
         return self.root_dir / self.name
 
     @property
-    def dataset_info_file_path(self) -> Path:
+    def dataset_info_file(self) -> Path:
         return self.dataset_dir / self.DATASET_INFO_FILE_NAME
 
     @property
@@ -172,12 +182,16 @@ class WaffleDataset:
         return self.dataset_dir / self.IMAGE_DIR_NAME
 
     @property
-    def database_file_path(self) -> Path:
+    def database_file(self) -> Path:
         return self.dataset_dir / self.DATABASE_FILE_NAME
+
+    @property
+    def log_file(self) -> Path:
+        return self.dataset_dir / "logs" / "dataset.log"
 
     @cached_property
     def database_service(self) -> DatabaseService:
-        return DatabaseService(str(self.database_file_path), image_directory=self.image_dir)
+        return DatabaseService(str(self.database_file), image_directory=self.image_dir)
 
     @property
     def category_dict(self) -> dict[str, CategoryInfo]:
@@ -240,7 +254,7 @@ class WaffleDataset:
                     ext=Path(image).suffix,
                     width=img.shape[1],
                     height=img.shape[0],
-                    original_file_name=Path(image).name,
+                    original_file_name=str(image),
                     task=TaskType.AGNOSTIC,
                 )
             )
@@ -273,13 +287,13 @@ class WaffleDataset:
         self,
         image_id: Union[str, list[str]] = None,
         category_id: Union[str, list[str]] = None,
-        split_type: Union[str, SplitType] = None,
+        split: Union[str, SplitType] = None,
     ) -> dict[str, ImageInfo]:
         if category_id is None:
-            images = self.database_service.get_images(image_id=image_id, split_type=split_type)
+            images = self.database_service.get_images(image_id=image_id, split=split)
         else:
             images = self.database_service.get_images_by_category_id(
-                category_id=category_id, split_type=split_type
+                category_id=category_id, split=split
             )
         return images
 
@@ -287,21 +301,22 @@ class WaffleDataset:
         self,
         image_id: Union[str, list[str]] = None,
         category_id: Union[str, list[str]] = None,
-        split_type: Union[str, SplitType] = None,
+        split: Union[str, SplitType] = None,
     ) -> list[ImageInfo]:
         return list(
-            self.get_image_dict(
-                image_id=image_id, category_id=category_id, split_type=split_type
-            ).values()
+            self.get_image_dict(image_id=image_id, category_id=category_id, split=split).values()
         )
+
+    def get_image_path(self, image: ImageInfo):
+        return self.database_service.get_image_path(image)
 
     def get_annotation_dict(
         self,
         image_id: Union[str, list[str]] = None,
         category_id: Union[str, list[str]] = None,
-        split_type: Union[str, SplitType] = None,
+        split: Union[str, SplitType] = None,
     ) -> dict[str, AnnotationInfo]:
-        images = self.get_images(image_id=image_id, category_id=category_id, split_type=split_type)
+        images = self.get_images(image_id=image_id, category_id=category_id, split=split)
         annotations = self.database_service.get_annotations_by_image_id(
             image_id=[image.id for image in images]
         )
@@ -311,11 +326,11 @@ class WaffleDataset:
         self,
         image_id: Union[str, list[str]] = None,
         category_id: Union[str, list[str]] = None,
-        split_type: Union[str, SplitType] = None,
+        split: Union[str, SplitType] = None,
     ) -> list[AnnotationInfo]:
         return list(
             self.get_annotation_dict(
-                image_id=image_id, category_id=category_id, split_type=split_type
+                image_id=image_id, category_id=category_id, split=split
             ).values()
         )
 
@@ -326,6 +341,31 @@ class WaffleDataset:
 
     def get_categories(self, category_id: Union[str, list[str]] = None) -> list[CategoryInfo]:
         return list(self.get_category_dict(category_id=category_id).values())
+
+    def get_mapper(
+        self,
+        image_id: Union[str, list[str]] = None,
+        category_id: Union[str, list[str]] = None,
+        split: Union[str, SplitType] = None,
+        labeled_only: bool = False,
+    ) -> dict[str, dict]:
+        image_dict = self.get_image_dict(image_id=image_id, category_id=category_id, split=split)
+        category_dict = self.get_category_dict(category_id=category_id)
+
+        mapper = {}
+        for image_id, image in image_dict.items():
+            annotations = self.get_annotations(image_id=image_id)
+            categories = [category_dict[annotation.category_id] for annotation in annotations]
+            if labeled_only and len(categories) == 0:
+                continue
+            mapper[image_id] = {
+                "image_path": self.get_image_path(image),
+                "image_info": image,
+                "annotations": annotations,
+                "categories": categories,
+            }
+
+        return mapper
 
     @update_dataset_decorator
     def update_image(self, image_id: str, update_image_info: UpdateImageInfo) -> ImageInfo:
@@ -367,9 +407,9 @@ class WaffleDataset:
         for dataset_dir in Path(root_dir).iterdir():
             if not dataset_dir.is_dir():
                 continue
-            dataset_info_file_path = dataset_dir / cls.DATASET_INFO_FILE_NAME
-            if dataset_info_file_path.exists():
-                dataset_info = DatasetInfo.from_dict(io.load_yaml(dataset_info_file_path))
+            dataset_info_file = dataset_dir / cls.DATASET_INFO_FILE_NAME
+            if dataset_info_file.exists():
+                dataset_info = DatasetInfo.from_dict(io.load_yaml(dataset_info_file))
                 if task is None or TaskType.from_str(task) == dataset_info.task:
                     dataset_list.append(Path(dataset_dir).name)
         return dataset_list
@@ -390,6 +430,7 @@ class WaffleDataset:
         if name in WaffleDataset.get_dataset_list(root_dir=root_dir):
             raise DatasetAlreadyExistsError(f"Dataset '{name}' already exists")
         dataset = WaffleDataset(name, task, root_dir=root_dir)
+        logger.info(f"Dataset created [{name}]\n{dataset}")
         return dataset
 
     @classmethod
@@ -401,6 +442,7 @@ class WaffleDataset:
         if name not in WaffleDataset.get_dataset_list(root_dir=root_dir):
             raise DatasetNotFoundError(f"Dataset '{name}' does not exists")
         dataset = WaffleDataset(name, root_dir=root_dir)
+        logger.info(f"Dataset loaded [{name}]\n{dataset}")
         return dataset
 
     @classmethod
@@ -411,6 +453,7 @@ class WaffleDataset:
     ):
         dataset = WaffleDataset.load(name, root_dir=root_dir)
         io.remove_directory(dataset.dataset_dir, recursive=True)
+        logger.info(f"Dataset deleted [{name}]\n{dataset}")
 
     @classmethod
     def copy(
@@ -426,38 +469,105 @@ class WaffleDataset:
             io.copy_files_to_directory(src_dataset.image_dir, dst_dataset.image_dir)
         except FileNotFoundError:
             pass
-        io.copy_file(src_dataset.database_file_path, dst_dataset.database_file_path)
+        io.copy_file(src_dataset.database_file, dst_dataset.database_file)
+        dst_dataset.update_dataset_info()
+        logger.info(f"Dataset copied [{src_name} -> {dst_name}]\n{dst_dataset}")
 
         return dst_dataset
 
-    @classmethod
-    def from_coco(
-        cls,
-        name: str,
-        task: Union[str, TaskType],
-        coco_file_path: Union[str, Path],
-        coco_image_dir: Union[str, Path],
-        root_dir: Union[str, Path] = None,
-    ) -> "WaffleDataset":
-        dataset = WaffleDataset.new(name, task, root_dir=root_dir)
+    # @classmethod
+    # def from_coco(
+    #     cls,
+    #     name: str,
+    #     task: Union[str, TaskType],
+    #     coco_file: Union[str, Path],
+    #     coco_image_dir: Union[str, Path],
+    #     root_dir: Union[str, Path] = None,
+    # ) -> "WaffleDataset":
+    #     dataset = WaffleDataset.new(name, task, root_dir=root_dir)
 
-        try:
-            adapter = CocoAdapter.from_target(coco_file_path, task=task)
+    #     try:
+    #         adapter = CocoAdapter.from_target(coco_file, task=task)
 
-            dataset.add_category(list(adapter.categories.values()))
-            dataset.add_image(
-                list(
-                    map(
-                        lambda image: Path(coco_image_dir, image.original_file_name),
-                        adapter.images.values(),
-                    )
-                ),
-                list(adapter.images.values()),
+    #         dataset.add_category(list(adapter.categories.values()))
+    #         dataset.add_image(
+    #             list(
+    #                 map(
+    #                     lambda image: Path(coco_image_dir, image.original_file_name),
+    #                     adapter.images.values(),
+    #                 )
+    #             ),
+    #             list(adapter.images.values()),
+    #         )
+    #         dataset.add_annotation(list(adapter.annotations.values()))
+
+    #         return dataset
+
+    #     except Exception as e:
+    #         WaffleDataset.delete(name, root_dir=root_dir)
+    #         raise e
+
+    def random_split(
+        self,
+        train_ratio: float = 0.8,
+        val_ratio: float = 0.1,
+        test_ratio: float = 0.1,
+        seed: int = 42,
+    ):
+        image_ids = list(self.get_mapper(labeled_only=True).keys())
+        if len(image_ids) == 0:
+            raise DatasetEmptyError(f"There are no labeled images")
+
+        random.seed(seed)
+        random.shuffle(image_ids)
+
+        # make sure that the ratios are valid
+        train_ratio = float(train_ratio) if train_ratio else 0.0
+        val_ratio = float(val_ratio) if val_ratio else 0.0
+        test_ratio = float(test_ratio) if test_ratio else 0.0
+        if (
+            any([ratio < 0 for ratio in [train_ratio, val_ratio, test_ratio]])
+            or sum([train_ratio, val_ratio, test_ratio]) == 0
+        ):
+            raise DatasetSplitError(
+                "Ratio must be non-negative float or int, and their sum must be positive"
             )
-            dataset.add_annotation(list(adapter.annotations.values()))
 
-            return dataset
+        # make the sum of ratios to 1
+        ratio_sum = train_ratio + val_ratio + test_ratio
+        train_ratio = train_ratio / ratio_sum
+        val_ratio = val_ratio / ratio_sum
+        test_ratio = test_ratio / ratio_sum
 
-        except Exception as e:
-            WaffleDataset.delete(name, root_dir=root_dir)
-            raise e
+        train_image_ids = image_ids[: int(len(image_ids) * train_ratio)]
+        val_image_ids = image_ids[
+            int(len(image_ids) * train_ratio) : int(len(image_ids) * (train_ratio + val_ratio))
+        ]
+        test_image_ids = image_ids[int(len(image_ids) * (train_ratio + val_ratio)) :]
+
+        for image_id in train_image_ids:
+            self.update_image(image_id, UpdateImageInfo(split=SplitType.TRAIN))
+        for image_id in val_image_ids:
+            self.update_image(image_id, UpdateImageInfo(split=SplitType.VALIDATION))
+        for image_id in test_image_ids:
+            self.update_image(image_id, UpdateImageInfo(split=SplitType.TEST))
+
+        logger.info(
+            f"Dataset splitted [{self.name}]\ntrain: {len(train_image_ids)}, val: {len(val_image_ids)}, test: {len(test_image_ids)}"
+        )
+
+    def get_dataset_iterator(
+        self,
+        image_id: Union[str, list[str]] = None,
+        category_id: Union[str, list[str]] = None,
+        split: Union[str, SplitType] = None,
+    ) -> Iterator:
+        return Iterator(self.get_mapper(image_id=image_id, category_id=category_id, split=split))
+
+    def visualize(
+        self,
+        image_id: Union[str, list[str]] = None,
+        category_id: Union[str, list[str]] = None,
+        split: Union[str, SplitType] = None,
+    ):
+        it = self.get_dataset_iterator(image_id=image_id, category_id=category_id, split=split)

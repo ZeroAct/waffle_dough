@@ -27,3 +27,11 @@ class DatasetAdapterError(DatasetException):
 
 class DatasetAdapterTaskError(DatasetAdapterError):
     """Exception raised for errors in the dataset adapter task."""
+
+
+class DatasetEmptyError(DatasetAdapterError):
+    """Exception raised for errors in the dataset adapter task."""
+
+
+class DatasetSplitError(DatasetAdapterError):
+    """Exception raised for errors in the dataset adapter task."""

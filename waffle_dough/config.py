@@ -9,7 +9,7 @@ dotenv.load_dotenv()
 
 class Config:
     # Dataset Configuration
-    DATASET_ROOT_DIR: str = os.environ.get("WAFFLE_DATASET_ROOT_DIR", "./dataset")
+    DATASET_ROOT_DIR: str = os.environ.get("WAFFLE_DATASET_ROOT_DIR", "./datasets")
 
 
 logger = logging.getLogger(__name__)

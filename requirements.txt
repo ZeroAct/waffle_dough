@@ -7,4 +7,4 @@ python-dotenv==1.0.0
 pydantic>=2.4.1
 sqlalchemy==2.0.22
 
-waffle-utils==1.1.0a2
+waffle-utils==1.1.0a3

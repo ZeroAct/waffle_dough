@@ -2,8 +2,7 @@ import logging
 from pathlib import Path
 from typing import Any, List, Optional, Tuple, Union
 
-import numpy as np
-from waffle_utils.file import io, search
+from waffle_utils.file import io
 
 from waffle_dough.exception.database_exception import *
 from waffle_dough.field import (
@@ -14,7 +13,6 @@ from waffle_dough.field import (
     UpdateCategoryInfo,
     UpdateImageInfo,
 )
-from waffle_dough.image import Image
 from waffle_dough.type.split_type import SplitType
 
 from .engine import create_session
@@ -94,7 +92,7 @@ class DatabaseService:
         image_id: Union[str, list[str]] = None,
         category_id: Union[str, list[str]] = None,
         annotation_id: Union[str, list[str]] = None,
-        split_type: SplitType = None,
+        split: SplitType = None,
         filter_by: dict[str, Any] = {},
         filter_in: dict[str, Optional[list]] = {},
         filter_like: list[Tuple[str, str]] = [],
@@ -125,8 +123,8 @@ class DatabaseService:
                 {"id": [annotation_id] if isinstance(annotation_id, str) else annotation_id}
             )
 
-        if split_type:
-            filter_by.update({"split": split_type})
+        if split:
+            filter_by.update({"split": split})
 
         query_dict.update(
             {
@@ -154,9 +152,9 @@ class DatabaseService:
         return count
 
     def get_images(
-        self, image_id: Union[str, list[str]] = None, split_type: SplitType = None, **kwargs
+        self, image_id: Union[str, list[str]] = None, split: SplitType = None, **kwargs
     ) -> dict[str, ImageInfo]:
-        images = self._get_multi(image_repository, id=image_id, split_type=split_type, **kwargs)
+        images = self._get_multi(image_repository, id=image_id, split=split, **kwargs)
         return {image.id: ImageInfo.model_validate(image, from_attributes=True) for image in images}
 
     def get_categories(
@@ -179,19 +177,19 @@ class DatabaseService:
 
     # Read with relations
     def get_images_by_category_id(
-        self, category_id: Union[str, list[str]], split_type: SplitType = None
+        self, category_id: Union[str, list[str]], split: SplitType = None
     ) -> dict[str, ImageInfo]:
         annotations = self._get_multi(annotation_repository, category_id=category_id)
         image_ids = list(set(map(lambda annotation: annotation.image_id, annotations)))
-        images = self._get_multi(image_repository, id=image_ids, split_type=split_type)
+        images = self._get_multi(image_repository, id=image_ids, split=split)
         return {image.id: ImageInfo.model_validate(image, from_attributes=True) for image in images}
 
     def get_images_by_annotation_id(
-        self, annotation_id: Union[str, list[str]], split_type: SplitType = None
+        self, annotation_id: Union[str, list[str]], split: SplitType = None
     ) -> dict[str, ImageInfo]:
         annotations = self._get_multi(annotation_repository, annotation_id=annotation_id)
         image_ids = list(set(map(lambda annotation: annotation.image_id, annotations)))
-        images = self._get_multi(image_repository, id=image_ids, split_type=split_type)
+        images = self._get_multi(image_repository, id=image_ids, split=split)
         return {image.id: ImageInfo.model_validate(image, from_attributes=True) for image in images}
 
     def get_categories_by_annotation_id(
@@ -233,8 +231,8 @@ class DatabaseService:
         }
 
     # Read custom
-    def get_image_count(self, split_type: SplitType = None, **kwargs) -> int:
-        return self._get_count(image_repository, split_type=split_type, **kwargs)
+    def get_image_count(self, split: SplitType = None, **kwargs) -> int:
+        return self._get_count(image_repository, split=split, **kwargs)
 
     def get_category_count(self) -> int:
         return self._get_count(category_repository)

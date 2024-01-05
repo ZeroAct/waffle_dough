@@ -229,8 +229,8 @@ def test_advance_read(tmpdir):
         ),
     )
 
-    images = database_service.get_images(split_type="train")
+    images = database_service.get_images(split="train")
     assert len(images) == 1
 
-    images = database_service.get_images(split_type="validation")
+    images = database_service.get_images(split="validation")
     assert len(images) == 1

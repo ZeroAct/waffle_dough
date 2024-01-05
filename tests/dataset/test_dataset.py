@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 import sqlalchemy
 
@@ -5,7 +6,7 @@ from waffle_dough.dataset.dataset import WaffleDataset
 from waffle_dough.exception.database_exception import *
 from waffle_dough.exception.dataset_exception import *
 from waffle_dough.field import AnnotationInfo, CategoryInfo, ImageInfo
-from waffle_dough.type import TaskType
+from waffle_dough.type import SplitType, TaskType
 
 
 def test_waffle_dataset_new(tmpdir):
@@ -170,3 +171,77 @@ def test_waffle_dataset_crud(tmpdir, sample_image_paths):
 
     dataset.delete_category(category.id)
     assert len(dataset.get_annotation_dict()) == 0
+
+
+def test_waffle_dataset_split(tmpdir, sample_image_paths):
+    dataset = WaffleDataset.new("test1", task="classification", root_dir=tmpdir)
+
+    with pytest.raises(DatasetEmptyError):
+        dataset.random_split(0.5)
+
+    images = dataset.add_image(sample_image_paths)
+    with pytest.raises(DatasetEmptyError):
+        dataset.random_split(0.8, 0.1, 0.1)
+
+    category = dataset.add_category(category_info=CategoryInfo.classification(name="test"))[0]
+    dataset.add_annotation(
+        annotation_info=[
+            AnnotationInfo.classification(
+                image_id=image.id,
+                category_id=category.id,
+            )
+            for image in images
+        ]
+    )
+
+    with pytest.raises(DatasetSplitError):
+        dataset.random_split(-1)
+
+    with pytest.raises(DatasetSplitError):
+        dataset.random_split(0, 0, 0)
+
+    image_num = len(sample_image_paths)
+    dataset.random_split(0.8, 0.1, 0.1)
+    assert len(dataset.get_images()) == image_num
+    assert len(dataset.get_images(split=SplitType.TRAIN)) == round(image_num * 0.8)
+    assert len(dataset.get_images(split=SplitType.VALIDATION)) == round(image_num * 0.1)
+    assert len(dataset.get_images(split=SplitType.TEST)) == round(image_num * 0.1)
+
+
+def test_waffle_dataset_get_dataset_iterator(tmpdir, sample_image_paths):
+    dataset = WaffleDataset.new("test1", task="classification", root_dir=tmpdir)
+
+    it = dataset.get_dataset_iterator()
+    assert len(it) == 0
+
+    images = dataset.add_image(sample_image_paths)
+    assert len(dataset.get_dataset_iterator()) == len(images)
+    assert len(dataset.get_dataset_iterator(split=SplitType.TRAIN)) == 0
+    assert len(dataset.get_dataset_iterator(split=SplitType.UNSET)) == len(images)
+
+    category = dataset.add_category(category_info=CategoryInfo.classification(name="test"))[0]
+    dataset.add_annotation(
+        annotation_info=[
+            AnnotationInfo.classification(
+                image_id=image.id,
+                category_id=category.id,
+            )
+            for image in images
+        ]
+    )
+    dataset.random_split(0.8, 0.1, 0.1)
+
+    assert len(dataset.get_dataset_iterator(split=SplitType.TRAIN)) == round(len(images) * 0.8)
+    assert len(dataset.get_dataset_iterator(split=SplitType.VALIDATION)) == round(len(images) * 0.1)
+    assert len(dataset.get_dataset_iterator(split=SplitType.TEST)) == round(len(images) * 0.1)
+
+    it = dataset.get_dataset_iterator(split=SplitType.TRAIN)
+    assert hasattr(it[0], "image") and isinstance(it[0].image, np.ndarray)
+    assert hasattr(it[0], "image_path")
+    assert hasattr(it[0], "image_info")
+    assert hasattr(it[0], "annotations")
+    assert hasattr(it[0], "categories")
+
+
+def test_waffle_dataset_visualize(tmpdir, sample_image_paths):
+    pass

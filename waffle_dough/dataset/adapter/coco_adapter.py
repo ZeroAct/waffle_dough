@@ -39,12 +39,12 @@ class CocoAdapter(BaseAdapter):
     @classmethod
     def from_target(
         cls,
-        coco_file_path: str,
+        coco_file: str,
         task: Union[str, TaskType] = TaskType.OBJECT_DETECTION,
     ) -> "CocoAdapter":
         adapter = cls(task=task)
 
-        coco = COCO(coco_file_path)
+        coco = COCO(coco_file)
 
         categories = {}
         coco_cat_id_to_new_cat_id = {}
