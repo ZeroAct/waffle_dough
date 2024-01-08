@@ -3,6 +3,7 @@ from typing import Union
 
 import cv2
 import numpy as np
+from waffle_utils.file import io
 
 from waffle_dough.type import ColorType
 
@@ -35,14 +36,14 @@ def cv2_imread(
 
 
 def cv2_imwrite(
-    image: np.ndarray,
     path: Union[str, Path],
+    image: np.ndarray,
     create_directory: bool = False,
     color_type: Union[str, ColorType] = ColorType.BGR,
 ):
     output_path = Path(path)
     if create_directory:
-        output_path.make_directory()
+        io.make_directory(output_path.parent)
 
     save_type = output_path.suffix
     bgr_image = cv2_cvt_color(image, color_type, ColorType.BGR)
@@ -52,3 +53,13 @@ def cv2_imwrite(
             img_arr.tofile(f)
     else:
         raise ValueError(f"Failed to save image: {path}")
+
+
+def cv2_imshow(
+    window_name: str,
+    image: np.ndarray,
+    delay: int = 0,
+):
+    cv2.imshow(window_name, image)
+    cv2.waitKey(delay)
+    cv2.destroyAllWindows()

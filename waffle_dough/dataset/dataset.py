@@ -27,12 +27,15 @@ from functools import cached_property
 from pathlib import Path
 from typing import Union
 
+from tqdm import tqdm
 from waffle_utils.file import io
 from waffle_utils.logger import datetime_now, initialize_logger
 
 from waffle_dough.database.service import DatabaseService
 from waffle_dough.dataset.adapter import CocoAdapter
 from waffle_dough.dataset.util.iterator import Iterator
+from waffle_dough.dataset.util.visualize import visualize
+from waffle_dough.exception.base_exception import BaseException
 from waffle_dough.exception.dataset_exception import *
 from waffle_dough.field import (
     AnnotationInfo,
@@ -135,6 +138,7 @@ class WaffleDataset:
         io.save_yaml(dataset_info.to_dict(), self.dataset_info_file)
         return dataset_info
 
+    # decorators
     def update_dataset_decorator(func):
         def wrapper(self, *args, **kwargs):
             result = func(self, *args, **kwargs)
@@ -143,6 +147,20 @@ class WaffleDataset:
 
         return wrapper
 
+    def exception_decorator(func):
+        def wrapper(self, *args, **kwargs):
+            try:
+                return func(self, *args, **kwargs)
+            except BaseException as e:
+                raise e
+            except Exception as e:
+                exc = BaseException(e)
+                exc.__traceback__ = e.__traceback__
+                raise exc
+
+        return wrapper
+
+    # properties
     @property
     def name(self) -> str:
         return self._name
@@ -223,6 +241,7 @@ class WaffleDataset:
 
     # methods (CRUD)
     @update_dataset_decorator
+    @exception_decorator
     def add_category(
         self, category_info: Union[CategoryInfo, list[CategoryInfo], dict, list[dict]]
     ) -> list[CategoryInfo]:
@@ -240,6 +259,7 @@ class WaffleDataset:
         return category_infos
 
     @update_dataset_decorator
+    @exception_decorator
     def add_image(
         self,
         image: Union[str, Path],
@@ -267,6 +287,7 @@ class WaffleDataset:
         return image_infos
 
     @update_dataset_decorator
+    @exception_decorator
     def add_annotation(
         self, annotation_info: Union[AnnotationInfo, list[AnnotationInfo], dict, list[dict]]
     ) -> list[AnnotationInfo]:
@@ -283,6 +304,7 @@ class WaffleDataset:
 
         return annotation_infos
 
+    @exception_decorator
     def get_image_dict(
         self,
         image_id: Union[str, list[str]] = None,
@@ -297,6 +319,7 @@ class WaffleDataset:
             )
         return images
 
+    @exception_decorator
     def get_images(
         self,
         image_id: Union[str, list[str]] = None,
@@ -307,9 +330,11 @@ class WaffleDataset:
             self.get_image_dict(image_id=image_id, category_id=category_id, split=split).values()
         )
 
+    @exception_decorator
     def get_image_path(self, image: ImageInfo):
         return self.database_service.get_image_path(image)
 
+    @exception_decorator
     def get_annotation_dict(
         self,
         image_id: Union[str, list[str]] = None,
@@ -322,6 +347,7 @@ class WaffleDataset:
         )
         return annotations
 
+    @exception_decorator
     def get_annotations(
         self,
         image_id: Union[str, list[str]] = None,
@@ -334,14 +360,17 @@ class WaffleDataset:
             ).values()
         )
 
+    @exception_decorator
     def get_category_dict(
         self, category_id: Union[str, list[str]] = None
     ) -> dict[str, CategoryInfo]:
         return self.database_service.get_categories(category_id=category_id)
 
+    @exception_decorator
     def get_categories(self, category_id: Union[str, list[str]] = None) -> list[CategoryInfo]:
         return list(self.get_category_dict(category_id=category_id).values())
 
+    @exception_decorator
     def get_mapper(
         self,
         image_id: Union[str, list[str]] = None,
@@ -368,35 +397,42 @@ class WaffleDataset:
         return mapper
 
     @update_dataset_decorator
+    @exception_decorator
     def update_image(self, image_id: str, update_image_info: UpdateImageInfo) -> ImageInfo:
         return self.database_service.update_image(image_id, update_image_info)
 
     @update_dataset_decorator
+    @exception_decorator
     def update_category(
         self, category_id: str, update_category_info: UpdateCategoryInfo
     ) -> CategoryInfo:
         return self.database_service.update_category(category_id, update_category_info)
 
     @update_dataset_decorator
+    @exception_decorator
     def update_annotation(
         self, annotation_id: str, update_annotation_info: UpdateAnnotationInfo
     ) -> AnnotationInfo:
         return self.database_service.update_annotation(annotation_id, update_annotation_info)
 
     @update_dataset_decorator
+    @exception_decorator
     def delete_image(self, image_id: str):
         self.database_service.delete_image(image_id)
 
     @update_dataset_decorator
+    @exception_decorator
     def delete_category(self, category_id: str):
         self.database_service.delete_category(category_id)
 
     @update_dataset_decorator
+    @exception_decorator
     def delete_annotation(self, annotation_id: str):
         self.database_service.delete_annotation(annotation_id)
 
     # methods (class methods)
     @classmethod
+    @exception_decorator
     def get_dataset_list(cls, task: Union[str, TaskType] = None, root_dir: str = None) -> list[str]:
         root_dir = cls.parse_root_dir(root_dir)
 
@@ -415,12 +451,14 @@ class WaffleDataset:
         return dataset_list
 
     @classmethod
+    @exception_decorator
     def parse_root_dir(cls, root_dir: str = None) -> Path:
         if root_dir is None:
             root_dir = os.environ.get("WAFFLE_DATASET_ROOT_DIR", "datasets")
         return Path(root_dir).absolute()
 
     @classmethod
+    @exception_decorator
     def new(
         cls,
         name: str,
@@ -434,6 +472,7 @@ class WaffleDataset:
         return dataset
 
     @classmethod
+    @exception_decorator
     def load(
         cls,
         name: str,
@@ -446,6 +485,7 @@ class WaffleDataset:
         return dataset
 
     @classmethod
+    @exception_decorator
     def delete(
         cls,
         name: str,
@@ -456,6 +496,7 @@ class WaffleDataset:
         logger.info(f"Dataset deleted [{name}]\n{dataset}")
 
     @classmethod
+    @exception_decorator
     def copy(
         cls,
         src_name: str,
@@ -507,6 +548,7 @@ class WaffleDataset:
     #         WaffleDataset.delete(name, root_dir=root_dir)
     #         raise e
 
+    @exception_decorator
     def random_split(
         self,
         train_ratio: float = 0.8,
@@ -556,6 +598,7 @@ class WaffleDataset:
             f"Dataset splitted [{self.name}]\ntrain: {len(train_image_ids)}, val: {len(val_image_ids)}, test: {len(test_image_ids)}"
         )
 
+    @exception_decorator
     def get_dataset_iterator(
         self,
         image_id: Union[str, list[str]] = None,
@@ -564,10 +607,36 @@ class WaffleDataset:
     ) -> Iterator:
         return Iterator(self.get_mapper(image_id=image_id, category_id=category_id, split=split))
 
+    @exception_decorator
     def visualize(
         self,
         image_id: Union[str, list[str]] = None,
         category_id: Union[str, list[str]] = None,
         split: Union[str, SplitType] = None,
-    ):
+        result_dir: Union[str, Path] = None,
+        show: bool = False,
+    ) -> str:
         it = self.get_dataset_iterator(image_id=image_id, category_id=category_id, split=split)
+        category_dict = self.get_category_dict()
+
+        result_dir = Path(result_dir or self.dataset_dir / "visualized").absolute()
+        logger.info(f"Visualizing dataset [{self.name}] to {result_dir}")
+
+        pgbar = tqdm(it, total=len(it), desc="Visualizing dataset")
+        for data in pgbar:
+            draw = visualize(
+                image=data.image,
+                annotations=data.annotations,
+                category_dict=category_dict,
+                image_info=data.image_info,
+            )
+
+            image_path = result_dir / data.image_info.original_file_name
+            image_io.cv2_imwrite(image_path, draw, create_directory=True)
+
+            if show:
+                image_io.cv2_imshow("vis", draw)
+
+        logger.info(f"Visualizing dataset [{self.name}] to {result_dir} finished")
+
+        return str(result_dir)

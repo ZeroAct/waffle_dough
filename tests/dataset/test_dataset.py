@@ -106,7 +106,7 @@ def test_waffle_dataset_crud(tmpdir, sample_image_paths):
     dataset.add_category(category_info={"name": "test2"})
     assert len(dataset.get_categories()) == len(dataset.get_category_dict()) == 2
 
-    with pytest.raises(sqlalchemy.exc.IntegrityError):
+    with pytest.raises(BaseException):
         dataset.add_category(category_info=CategoryInfo.classification(name="test1"))
 
     category_id = list(dataset.get_category_dict().keys())[0]
