@@ -604,8 +604,14 @@ class WaffleDataset:
         image_id: Union[str, list[str]] = None,
         category_id: Union[str, list[str]] = None,
         split: Union[str, SplitType] = None,
+        preprocess=None,
+        augment=None,
     ) -> Iterator:
-        return Iterator(self.get_mapper(image_id=image_id, category_id=category_id, split=split))
+        return Iterator(
+            self.get_mapper(image_id=image_id, category_id=category_id, split=split),
+            preprocess=preprocess,
+            augment=augment,
+        )
 
     @exception_decorator
     def visualize(
