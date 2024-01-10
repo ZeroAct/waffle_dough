@@ -44,7 +44,7 @@ class CocoAdapter(BaseAdapter):
     ) -> "CocoAdapter":
         adapter = cls(task=task)
 
-        if isinstance(coco_dataset, str):
+        if isinstance(coco_dataset, (str, Path)):
             coco = COCO(coco_dataset)
         elif isinstance(coco_dataset, dict):
             coco = COCO()
@@ -70,7 +70,7 @@ class CocoAdapter(BaseAdapter):
                 width=img["width"],
                 height=img["height"],
                 original_file_name=img["file_name"],
-                date_captured=getattr(img, "date_captured", None),
+                date_captured=img.get("date_captured", None),
                 task=TaskType.AGNOSTIC,
             )
             coco_img_id_to_new_img_id[img_id] = img.id

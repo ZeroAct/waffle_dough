@@ -543,15 +543,13 @@ class WaffleDataset:
             adapter = CocoAdapter.from_target(coco, task=task)
 
             dataset.add_category(list(adapter.categories.values()))
-            dataset.add_image(
-                list(
-                    map(
-                        lambda image: Path(coco_image_dir, image.original_file_name),
-                        adapter.images.values(),
-                    )
-                ),
-                list(adapter.images.values()),
-            )
+
+            image_path = []
+            image_infos = []
+            for image in adapter.images.values():
+                image_path.append(Path(coco_image_dir, image.original_file_name))
+                image_infos.append(image)
+            dataset.add_image(image_path, image_infos)
             dataset.add_annotation(list(adapter.annotations.values()))
 
             return dataset
