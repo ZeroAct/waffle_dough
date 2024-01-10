@@ -39,20 +39,25 @@ class CocoAdapter(BaseAdapter):
     @classmethod
     def from_target(
         cls,
-        coco_file: str,
+        coco_dataset: Union[str, dict],
         task: Union[str, TaskType] = TaskType.OBJECT_DETECTION,
     ) -> "CocoAdapter":
         adapter = cls(task=task)
 
-        coco = COCO(coco_file)
+        if isinstance(coco_dataset, str):
+            coco = COCO(coco_dataset)
+        elif isinstance(coco_dataset, dict):
+            coco = COCO()
+            coco.dataset = coco_dataset
+            coco.createIndex()
 
         categories = {}
         coco_cat_id_to_new_cat_id = {}
         for cat_id, cat in coco.cats.items():
-            cat = CategoryInfo(
-                name=cat["name"],
-                supercategory=cat["supercategory"],
+            cat_id = cat.pop("id", None) or cat_id
+            cat = CategoryInfo.from_dict(
                 task=task,
+                d=cat,
             )
             coco_cat_id_to_new_cat_id[cat_id] = cat.id
             categories[cat.id] = cat
@@ -66,7 +71,7 @@ class CocoAdapter(BaseAdapter):
                 height=img["height"],
                 original_file_name=img["file_name"],
                 date_captured=getattr(img, "date_captured", None),
-                task=task,
+                task=TaskType.AGNOSTIC,
             )
             coco_img_id_to_new_img_id[img_id] = img.id
             images[img.id] = img

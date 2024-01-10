@@ -263,21 +263,33 @@ class WaffleDataset:
     def add_image(
         self,
         image: Union[str, Path],
-        # image_info: Union[ImageInfo, list[ImageInfo], dict, list[dict]] = None
+        image_info: Union[ImageInfo, list[ImageInfo], dict, list[dict]] = None,
     ) -> list[ImageInfo]:
         images = image if isinstance(image, list) else [image]
-        image_infos = []
-        for image in images:
-            img = image_io.cv2_imread(image)
-            image_infos.append(
-                ImageInfo(
-                    ext=Path(image).suffix,
-                    width=img.shape[1],
-                    height=img.shape[0],
-                    original_file_name=str(image),
-                    task=TaskType.AGNOSTIC,
+        if image_info is None:
+            image_infos = []
+            for image in images:
+                img = image_io.cv2_imread(image)
+                image_infos.append(
+                    ImageInfo(
+                        ext=Path(image).suffix,
+                        width=img.shape[1],
+                        height=img.shape[0],
+                        original_file_name=str(image),
+                        task=TaskType.AGNOSTIC,
+                    )
                 )
-            )
+        else:
+            image_infos = []
+            for image_info in image_info if isinstance(image_info, list) else [image_info]:
+                if isinstance(image_info, dict):
+                    image_info = ImageInfo.from_dict(task=TaskType.AGNOSTIC, d=image_info)
+                if image_info.task != TaskType.AGNOSTIC:
+                    raise DatasetTaskError(f"Invalid task: {image_info.task}")
+                image_infos.append(image_info)
+
+            if len(images) != len(image_infos):
+                raise DatasetImportError(f"Number of images and image_infos must be same")
 
         for image, image_info in zip(images, image_infos):
             if isinstance(image_info, dict):
@@ -516,37 +528,37 @@ class WaffleDataset:
 
         return dst_dataset
 
-    # @classmethod
-    # def from_coco(
-    #     cls,
-    #     name: str,
-    #     task: Union[str, TaskType],
-    #     coco_file: Union[str, Path],
-    #     coco_image_dir: Union[str, Path],
-    #     root_dir: Union[str, Path] = None,
-    # ) -> "WaffleDataset":
-    #     dataset = WaffleDataset.new(name, task, root_dir=root_dir)
+    @classmethod
+    def from_coco(
+        cls,
+        name: str,
+        task: Union[str, TaskType],
+        coco: Union[str, Path, dict],
+        coco_image_dir: Union[str, Path],
+        root_dir: Union[str, Path] = None,
+    ) -> "WaffleDataset":
+        dataset = WaffleDataset.new(name, task, root_dir=root_dir)
 
-    #     try:
-    #         adapter = CocoAdapter.from_target(coco_file, task=task)
+        try:
+            adapter = CocoAdapter.from_target(coco, task=task)
 
-    #         dataset.add_category(list(adapter.categories.values()))
-    #         dataset.add_image(
-    #             list(
-    #                 map(
-    #                     lambda image: Path(coco_image_dir, image.original_file_name),
-    #                     adapter.images.values(),
-    #                 )
-    #             ),
-    #             list(adapter.images.values()),
-    #         )
-    #         dataset.add_annotation(list(adapter.annotations.values()))
+            dataset.add_category(list(adapter.categories.values()))
+            dataset.add_image(
+                list(
+                    map(
+                        lambda image: Path(coco_image_dir, image.original_file_name),
+                        adapter.images.values(),
+                    )
+                ),
+                list(adapter.images.values()),
+            )
+            dataset.add_annotation(list(adapter.annotations.values()))
 
-    #         return dataset
+            return dataset
 
-    #     except Exception as e:
-    #         WaffleDataset.delete(name, root_dir=root_dir)
-    #         raise e
+        except Exception as e:
+            WaffleDataset.delete(name, root_dir=root_dir)
+            raise e
 
     @exception_decorator
     def random_split(
@@ -574,6 +586,14 @@ class WaffleDataset:
             raise DatasetSplitError(
                 "Ratio must be non-negative float or int, and their sum must be positive"
             )
+
+        # initialize split
+        for image_id in (
+            list(self.get_image_dict(split=SplitType.TRAIN).keys())
+            + list(self.get_image_dict(split=SplitType.VALIDATION).keys())
+            + list(self.get_image_dict(split=SplitType.TEST).keys())
+        ):
+            self.update_image(image_id, UpdateImageInfo(split=SplitType.UNSET))
 
         # make the sum of ratios to 1
         ratio_sum = train_ratio + val_ratio + test_ratio
@@ -621,7 +641,7 @@ class WaffleDataset:
         split: Union[str, SplitType] = None,
         result_dir: Union[str, Path] = None,
         show: bool = False,
-    ) -> str:
+    ) -> Path:
         it = self.get_dataset_iterator(image_id=image_id, category_id=category_id, split=split)
         category_dict = self.get_category_dict()
 
@@ -637,7 +657,7 @@ class WaffleDataset:
                 image_info=data.image_info,
             )
 
-            image_path = result_dir / data.image_info.original_file_name
+            image_path = result_dir / (data.image_info.id + data.image_info.ext)
             image_io.cv2_imwrite(image_path, draw, create_directory=True)
 
             if show:
@@ -645,4 +665,27 @@ class WaffleDataset:
 
         logger.info(f"Visualizing dataset [{self.name}] to {result_dir} finished")
 
-        return str(result_dir)
+        return Path(result_dir)
+
+    # @exception_decorator
+    # def experimental_filter(
+    #     self,
+    #     new_dataset_name: str,
+    #     image_lambda: callable[ImageInfo, bool] = None,
+    #     annotation_lambda: callable[AnnotationInfo, bool] = None,
+    #     category_lambda: callable[CategoryInfo, bool] = None,
+    #     root_dir: Union[str, Path] = None,
+    # ) -> "WaffleDataset":
+    #     pass
+
+    # @exception_decorator
+    # def experimental_manipulate(
+    #     self,
+    #     new_dataset_name: str,
+    #     task: Union[str, TaskType],
+    #     image_lambda: callable[ImageInfo, bool] = None,
+    #     annotation_lambda: callable[AnnotationInfo, bool] = None,
+    #     category_lambda: callable[CategoryInfo, bool] = None,
+    #     root_dir: Union[str, Path] = None,
+    # ) -> "WaffleDataset":
+    #     pass

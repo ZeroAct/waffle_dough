@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import pytest
 import sqlalchemy
@@ -244,4 +245,58 @@ def test_waffle_dataset_get_dataset_iterator(tmpdir, sample_image_paths):
 
 
 def test_waffle_dataset_visualize(tmpdir, sample_image_paths):
-    pass
+    dataset = WaffleDataset.new("test1", task="classification", root_dir=tmpdir)
+
+    images = dataset.add_image(sample_image_paths)
+    draw_dir = dataset.visualize()
+    assert draw_dir.exists() and len(list(draw_dir.iterdir())) == len(images)
+
+    category = dataset.add_category(category_info=CategoryInfo.classification(name="test"))[0]
+    dataset.add_annotation(
+        annotation_info=[
+            AnnotationInfo.classification(
+                image_id=image.id,
+                category_id=category.id,
+            )
+            for image in images
+        ]
+    )
+    dataset.random_split(0.8, 0.1, 0.1)
+
+    draw_dir = dataset.visualize(result_dir=tmpdir / "draw", split=SplitType.TRAIN)
+    assert draw_dir.exists() and len(list(draw_dir.iterdir())) == round(len(images) * 0.8)
+
+
+# convert
+def test_waffle_dataset_from_coco(tmpdir, sample_image_paths):
+    coco = {
+        "categories": [
+            {"id": 1, "name": "dog"},
+            {"id": 2, "name": "cat"},
+        ],
+        "images": [
+            {"id": 1, "file_name": "dog.png", "width": 300, "height": 300},
+            {"id": 2, "file_name": "cat.png", "width": 300, "height": 300},
+        ],
+        "annotations": [
+            {"id": 1, "image_id": 1, "category_id": 1, "bbox": [50, 50, 50, 50]},
+            {"id": 2, "image_id": 2, "category_id": 1, "bbox": [80, 80, 100, 100]},
+            {"id": 3, "image_id": 2, "category_id": 2, "bbox": [120, 120, 100, 100]},
+        ],
+    }
+
+    image_dir = tmpdir / "coco_images"
+    image_dir.mkdir()
+    for image in coco["images"]:
+        img = np.random.randint(0, 255, (300, 300, 3), dtype=np.uint8)
+        cv2.imwrite(str(image_dir / image["file_name"]), img)
+
+    dataset = WaffleDataset.from_coco(
+        name="coco_import",
+        task="object_detection",
+        coco=coco,
+        coco_image_dir=image_dir,
+        root_dir=tmpdir,
+    )
+
+    dataset.visualize(result_dir="/home/zero/ws/waffle_dough/vis")
