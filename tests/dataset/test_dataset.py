@@ -1,7 +1,8 @@
+from pathlib import Path
+
 import cv2
 import numpy as np
 import pytest
-import sqlalchemy
 
 from waffle_dough.dataset.dataset import WaffleDataset
 from waffle_dough.exception.database_exception import *
@@ -268,7 +269,7 @@ def test_waffle_dataset_visualize(tmpdir, sample_image_paths):
 
 
 # convert
-def test_waffle_dataset_from_coco(tmpdir, sample_image_paths):
+def test_waffle_dataset_coco(tmpdir, sample_image_paths):
     coco = {
         "categories": [
             {"id": 1, "name": "dog"},
@@ -277,6 +278,9 @@ def test_waffle_dataset_from_coco(tmpdir, sample_image_paths):
         "images": [
             {"id": 1, "file_name": "dog.png", "width": 300, "height": 300},
             {"id": 2, "file_name": "cat.png", "width": 300, "height": 300},
+            {"id": 3, "file_name": "cat2.png", "width": 300, "height": 300},
+            {"id": 4, "file_name": "cat3.png", "width": 300, "height": 300},
+            {"id": 5, "file_name": "cat4.png", "width": 300, "height": 300},
         ],
         "annotations": [
             {"id": 1, "image_id": 1, "category_id": 1, "bbox": [50, 50, 50, 50]},
@@ -291,12 +295,24 @@ def test_waffle_dataset_from_coco(tmpdir, sample_image_paths):
         img = np.random.randint(0, 255, (300, 300, 3), dtype=np.uint8)
         cv2.imwrite(str(image_dir / image["file_name"]), img)
 
-    dataset = WaffleDataset.from_coco(
-        name="coco_import",
-        task="object_detection",
+    dataset1 = WaffleDataset.new("test1", task="object_detection", root_dir=tmpdir)
+    dataset1.import_coco(
         coco=coco,
         coco_image_dir=image_dir,
-        root_dir=tmpdir,
     )
 
-    dataset.visualize(result_dir="/home/zero/ws/waffle_dough/vis")
+    dataset1.visualize(result_dir="/home/zero/ws/waffle_dough/vis")
+
+    export_dir = Path(dataset1.export("coco", result_dir=tmpdir / "coco"))
+    assert export_dir.exists()
+
+    dataset2 = WaffleDataset.new("test2", task="object_detection", root_dir=tmpdir)
+    for split in SplitType:
+        dataset2.import_coco(
+            coco=export_dir / f"{split.lower()}.json",
+            coco_image_dir=export_dir / "images",
+        )
+
+    assert len(dataset1.get_images()) == len(dataset2.get_images())
+    assert len(dataset1.get_categories()) == len(dataset2.get_categories())
+    assert len(dataset1.get_annotations()) == len(dataset2.get_annotations())

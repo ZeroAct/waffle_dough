@@ -33,6 +33,11 @@ from waffle_utils.logger import datetime_now, initialize_logger
 
 from waffle_dough.database.service import DatabaseService
 from waffle_dough.dataset.adapter import CocoAdapter
+from waffle_dough.dataset.adapter.callback import (
+    BaseDatasetAdapterCallback,
+    DatasetAdapterFileProgressCallback,
+    DatasetAdapterTqdmProgressCallback,
+)
 from waffle_dough.dataset.util.iterator import Iterator
 from waffle_dough.dataset.util.visualize import visualize
 from waffle_dough.exception.base_exception import BaseException
@@ -46,7 +51,7 @@ from waffle_dough.field import (
     UpdateImageInfo,
 )
 from waffle_dough.image import io as image_io
-from waffle_dough.type import SplitType, TaskType
+from waffle_dough.type import DataType, SplitType, TaskType
 
 initialize_logger(
     console_level=os.environ.get("WAFFLE_DATASET_CONSOLE_LOG_LEVEL", "INFO"),
@@ -204,8 +209,16 @@ class WaffleDataset:
         return self.dataset_dir / self.DATABASE_FILE_NAME
 
     @property
+    def export_dir(self) -> Path:
+        return self.dataset_dir / "export"
+
+    @property
+    def log_dir(self) -> Path:
+        return self.dataset_dir / "logs"
+
+    @property
     def log_file(self) -> Path:
-        return self.dataset_dir / "logs" / "dataset.log"
+        return self.log_dir / "dataset.log"
 
     @cached_property
     def database_service(self) -> DatabaseService:
@@ -528,35 +541,96 @@ class WaffleDataset:
 
         return dst_dataset
 
-    @classmethod
-    def from_coco(
-        cls,
-        name: str,
-        task: Union[str, TaskType],
+    @exception_decorator
+    def import_coco(
+        self,
         coco: Union[str, Path, dict],
         coco_image_dir: Union[str, Path],
-        root_dir: Union[str, Path] = None,
+        split: Union[str, SplitType] = SplitType.UNSET,
+        callbacks: list[BaseDatasetAdapterCallback] = None,
     ) -> "WaffleDataset":
-        dataset = WaffleDataset.new(name, task, root_dir=root_dir)
+        adapter = CocoAdapter(
+            callbacks=[
+                DatasetAdapterFileProgressCallback(file=self.log_dir / "from_coco.json"),
+                DatasetAdapterTqdmProgressCallback(desc="Importing COCO dataset"),
+            ]
+            + (callbacks if callbacks else [])
+        )
 
-        try:
-            adapter = CocoAdapter.from_target(coco, task=task)
+        adapter.import_target(coco)
 
-            dataset.add_category(list(adapter.categories.values()))
+        category_name_to_id = {cat.name: cat.id for cat in self.categories}
 
-            image_path = []
-            image_infos = []
-            for image in adapter.images.values():
-                image_path.append(Path(coco_image_dir, image.original_file_name))
-                image_infos.append(image)
-            dataset.add_image(image_path, image_infos)
-            dataset.add_annotation(list(adapter.annotations.values()))
+        new_filtered_categories = []
+        new_id_to_old_id = {}
+        for category in adapter.category_dict.values():
+            if category.name in category_name_to_id:
+                new_id_to_old_id[category.id] = category_name_to_id[category.name]
+                category.id = category_name_to_id[category.name]
+            else:
+                new_filtered_categories.append(category)
+        self.add_category(new_filtered_categories)
 
-            return dataset
+        image_path = []
+        image_infos = []
+        for image in adapter.image_dict.values():
+            image_path.append(Path(coco_image_dir, image.original_file_name))
+            image.split = SplitType.from_str(split) if split else SplitType.UNSET
+            image_infos.append(image)
+        self.add_image(image_path, image_infos)
 
-        except Exception as e:
-            WaffleDataset.delete(name, root_dir=root_dir)
-            raise e
+        new_annotations = []
+        for annotation in adapter.annotation_dict.values():
+            if annotation.category_id in new_id_to_old_id:
+                annotation.category_id = new_id_to_old_id[annotation.category_id]
+            new_annotations.append(annotation)
+        self.add_annotation(new_annotations)
+
+        return self
+
+    @exception_decorator
+    def export(
+        self,
+        data_type: Union[str, DataType],
+        result_dir: Union[str, Path] = None,
+        callbacks: list[BaseDatasetAdapterCallback] = None,
+        force: bool = False,
+    ) -> str:
+        result_dir = Path(result_dir or self.export_dir).absolute()
+        if result_dir.exists():
+            if not force:
+                raise DatasetAdapterAlreadyExistsError(
+                    f"Exported dataset already exists: {result_dir}"
+                )
+            logger.info(f"There is already a directory [{result_dir}]. Deleting...")
+            io.remove_directory(result_dir, recursive=True)
+        io.make_directory(result_dir)
+        logger.info(f"Exporting dataset [{self.name}] to COCO format to {result_dir}")
+
+        if data_type == DataType.COCO:
+            adapter = CocoAdapter(
+                image_dict=self.image_dict,
+                annotation_dict=self.annotation_dict,
+                category_dict=self.category_dict,
+                callbacks=[
+                    DatasetAdapterFileProgressCallback(file=self.log_dir / "export.json"),
+                    DatasetAdapterTqdmProgressCallback(desc="Exporting dataset to COCO format"),
+                ]
+                + (callbacks if callbacks else []),
+            )
+            split_coco = adapter.to_target()
+
+            for split, coco in split_coco.items():
+                io.save_json(coco, result_dir / f"{split.lower()}.json")
+
+            io.copy_files_to_directory(self.image_dir, result_dir / "images", create_directory=True)
+
+        else:
+            raise DatasetAdapterNotFoundError(
+                f"Data type {data_type} is not supported yet. {list(DataType)}"
+            )
+
+        return str(result_dir)
 
     @exception_decorator
     def random_split(

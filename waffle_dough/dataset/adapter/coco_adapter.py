@@ -6,7 +6,7 @@ from pycocotools.coco import COCO
 from waffle_dough.exception import *
 from waffle_dough.field import AnnotationInfo, CategoryInfo, ImageInfo
 from waffle_dough.math.segmentation import convert_segmentation
-from waffle_dough.type import SegmentationType, TaskType
+from waffle_dough.type import SegmentationType, SplitType, TaskType
 
 from .base_adapter import BaseAdapter
 
@@ -14,36 +14,35 @@ from .base_adapter import BaseAdapter
 class CocoAdapter(BaseAdapter):
     def __init__(
         self,
-        images: dict[str, ImageInfo] = None,
-        annotations: dict[str, AnnotationInfo] = None,
-        categories: dict[str, CategoryInfo] = None,
+        image_dict: dict[str, ImageInfo] = None,
+        annotation_dict: dict[str, AnnotationInfo] = None,
+        category_dict: dict[str, CategoryInfo] = None,
         task: Union[str, TaskType] = TaskType.OBJECT_DETECTION,
         callbacks: list[callable] = None,
         *args,
         **kwargs,
     ):
-        super().__init__(*args, callbacks=callbacks, **kwargs)
+        super().__init__(
+            image_dict=image_dict,
+            annotation_dict=annotation_dict,
+            category_dict=category_dict,
+            task=task,
+            callbacks=[] + (callbacks if callbacks else []),
+            *args,
+            **kwargs,
+        )
 
-        self.images: dict[str, ImageInfo] = images or {}
-        self.annotations: dict[str, AnnotationInfo] = annotations or {}
-        self.categories: dict[str, CategoryInfo] = categories or {}
-
-        if task not in [
+        if self.task not in [
             TaskType.OBJECT_DETECTION,
             TaskType.INSTANCE_SEGMENTATION,
             TaskType.SEMANTIC_SEGMENTATION,
         ]:
-            raise DatasetAdapterTaskError(f"Task {task} is not supported by COCO format.")
-        self.task: Union[str, TaskType] = task.lower()
+            raise DatasetAdapterTaskError(f"Task {self.task} is not supported by COCO format.")
 
-    @classmethod
-    def from_target(
-        cls,
+    def import_target(
+        self,
         coco_dataset: Union[str, dict],
-        task: Union[str, TaskType] = TaskType.OBJECT_DETECTION,
     ) -> "CocoAdapter":
-        adapter = cls(task=task)
-
         if isinstance(coco_dataset, (str, Path)):
             coco = COCO(coco_dataset)
         elif isinstance(coco_dataset, dict):
@@ -51,18 +50,21 @@ class CocoAdapter(BaseAdapter):
             coco.dataset = coco_dataset
             coco.createIndex()
 
-        categories = {}
+        self.run_callback_hooks("on_loop_start", len(coco.cats) + len(coco.imgs) + len(coco.anns))
+
+        category_dict = {}
         coco_cat_id_to_new_cat_id = {}
         for cat_id, cat in coco.cats.items():
             cat_id = cat.pop("id", None) or cat_id
             cat = CategoryInfo.from_dict(
-                task=task,
+                task=self.task,
                 d=cat,
             )
             coco_cat_id_to_new_cat_id[cat_id] = cat.id
-            categories[cat.id] = cat
+            category_dict[cat.id] = cat
+            self.run_callback_hooks("on_step_end")
 
-        images = {}
+        image_dict = {}
         coco_img_id_to_new_img_id = {}
         for img_id, img in coco.imgs.items():
             img = ImageInfo(
@@ -74,17 +76,18 @@ class CocoAdapter(BaseAdapter):
                 task=TaskType.AGNOSTIC,
             )
             coco_img_id_to_new_img_id[img_id] = img.id
-            images[img.id] = img
+            image_dict[img.id] = img
+            self.run_callback_hooks("on_step_end")
 
-        annotations = {}
+        annotation_dict = {}
         for ann in coco.anns.values():
-            img = images[coco_img_id_to_new_img_id[ann["image_id"]]]
+            img = image_dict[coco_img_id_to_new_img_id[ann["image_id"]]]
             cat = coco_cat_id_to_new_cat_id[ann["category_id"]]
 
             W = img.width
             H = img.height
 
-            if task == TaskType.OBJECT_DETECTION:
+            if self.task == TaskType.OBJECT_DETECTION:
                 x1, y1, w, h = ann["bbox"]
                 ann = AnnotationInfo.object_detection(
                     image_id=img.id,
@@ -93,7 +96,7 @@ class CocoAdapter(BaseAdapter):
                     iscrowd=getattr(ann, "iscrowd", None),
                     score=getattr(ann, "score", None),
                 )
-            elif task in [TaskType.INSTANCE_SEGMENTATION, TaskType.SEMANTIC_SEGMENTATION]:
+            elif self.task in [TaskType.INSTANCE_SEGMENTATION, TaskType.SEMANTIC_SEGMENTATION]:
                 segmentation = ann["segmentation"]
                 if isinstance(segmentation, dict):
                     segmentation = convert_segmentation(
@@ -113,73 +116,95 @@ class CocoAdapter(BaseAdapter):
                     score=getattr(ann, "score", None),
                 )
 
-            annotations[ann.id] = ann
+            annotation_dict[ann.id] = ann
+            self.run_callback_hooks("on_step_end")
+        self.run_callback_hooks("on_loop_end")
 
-        adapter.images = images
-        adapter.annotations = annotations
-        adapter.categories = categories
+        self.image_dict = image_dict
+        self.annotation_dict = annotation_dict
+        self.category_dict = category_dict
 
-        return adapter
+        return self
 
-    def to_target(self, image_ids: list[str] = None, category_ids: list[str] = None) -> dict:
-        coco = {}
+    def to_target(self) -> dict:
 
-        coco["images"] = []
-        coco["categories"] = []
-        coco["annotations"] = []
+        self.run_callback_hooks(
+            "on_loop_start",
+            len(self.image_dict) + len(self.category_dict) + len(self.annotation_dict),
+        )
+
+        categories = []
+        target_cat_id_to_coco_cat_id = {}
+        for category_id, category in self.category_dict.items():
+            coco_cat_id = len(categories) + 1
+            target_cat_id_to_coco_cat_id[category_id] = coco_cat_id
+
+            categories.append(
+                {
+                    "id": coco_cat_id,
+                    "name": category.name,
+                    "supercategory": category.supercategory,
+                }
+            )
+            self.run_callback_hooks("on_step_end")
+
+        split_coco = {}
+        for split in SplitType:
+            split_coco[split] = {
+                "categories": categories,
+                "images": [],
+                "annotations": [],
+            }
 
         target_img_id_to_coco_img_id = {}
-        for img_id in image_ids or self.images.keys():
-            img = self.images[img_id]
+        for image_id, image in self.image_dict.items():
+            split = image.split
+            coco = split_coco[split]
+
             coco_img_id = len(coco["images"]) + 1
-            target_img_id_to_coco_img_id[img_id] = coco_img_id
+            target_img_id_to_coco_img_id[image_id] = coco_img_id
 
             coco["images"].append(
                 {
                     "id": coco_img_id,
-                    "file_name": img.original_file_name,
-                    "width": img.width,
-                    "height": img.height,
-                    "date_captured": img.date_captured,
+                    "file_name": image.id + image.ext,  # TODO: save to original file name
+                    "width": image.width,
+                    "height": image.height,
+                    "date_captured": image.date_captured,
                 }
             )
+            self.run_callback_hooks("on_step_end")
 
-        target_cat_id_to_coco_cat_id = {}
-        for cat_id in category_ids or self.categories.keys():
-            cat = self.categories[cat_id]
-            coco_cat_id = len(coco["categories"]) + 1
-            target_cat_id_to_coco_cat_id[cat_id] = coco_cat_id
+        for annotation_id, annotation in self.annotation_dict.items():
+            split = self.image_dict[annotation.image_id].split
+            coco = split_coco[split]
 
-            coco["categories"].append(
-                {
-                    "id": coco_cat_id,
-                    "name": cat.name,
-                    "supercategory": cat.supercategory,
-                }
-            )
+            image = self.image_dict[annotation.image_id]
 
-        for ann_id, ann in self.annotations.items():
-            img = self.images[ann.image_id]
-
-            W = img.width
-            H = img.height
+            W = image.width
+            H = image.height
 
             if self.task == TaskType.OBJECT_DETECTION:
-                W = img.width
-                H = img.height
+                W = image.width
+                H = image.height
 
                 coco["annotations"].append(
                     {
-                        "id": ann_id,
-                        "image_id": target_img_id_to_coco_img_id[ann.image_id],
-                        "category_id": target_cat_id_to_coco_cat_id[ann.category_id],
-                        "bbox": [ann.bbox[0] * W, ann.bbox[1] * H, ann.bbox[2] * W, ann.bbox[3] * H],
-                        "iscrowd": ann.iscrowd,
-                        "score": ann.score,
+                        "id": annotation_id,
+                        "image_id": target_img_id_to_coco_img_id[annotation.image_id],
+                        "category_id": target_cat_id_to_coco_cat_id[annotation.category_id],
+                        "bbox": [
+                            annotation.bbox[0] * W,
+                            annotation.bbox[1] * H,
+                            annotation.bbox[2] * W,
+                            annotation.bbox[3] * H,
+                        ],
+                        "iscrowd": annotation.iscrowd,
+                        "score": annotation.score,
                     }
                 )
             elif self.task in [TaskType.INSTANCE_SEGMENTATION, TaskType.SEMANTIC_SEGMENTATION]:
-                segmentation = ann.segmentation
+                segmentation = annotation.segmentation
 
                 for i, segmentation_ in enumerate(segmentation):
                     for j, point in enumerate(segmentation_):
@@ -187,14 +212,21 @@ class CocoAdapter(BaseAdapter):
 
                 coco["annotations"].append(
                     {
-                        "id": ann_id,
-                        "image_id": target_img_id_to_coco_img_id[ann.image_id],
-                        "category_id": target_cat_id_to_coco_cat_id[ann.category_id],
-                        "bbox": [ann.bbox[0] * W, ann.bbox[1] * H, ann.bbox[2] * W, ann.bbox[3] * H],
+                        "id": annotation_id,
+                        "image_id": target_img_id_to_coco_img_id[annotation.image_id],
+                        "category_id": target_cat_id_to_coco_cat_id[annotation.category_id],
+                        "bbox": [
+                            annotation.bbox[0] * W,
+                            annotation.bbox[1] * H,
+                            annotation.bbox[2] * W,
+                            annotation.bbox[3] * H,
+                        ],
                         "segmentation": segmentation,
-                        "iscrowd": ann.iscrowd,
-                        "score": ann.score,
+                        "iscrowd": annotation.iscrowd,
+                        "score": annotation.score,
                     }
                 )
+            self.run_callback_hooks("on_step_end")
+        self.run_callback_hooks("on_loop_end")
 
-        return coco
+        return split_coco

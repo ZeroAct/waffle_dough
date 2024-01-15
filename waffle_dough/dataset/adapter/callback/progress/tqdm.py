@@ -27,14 +27,11 @@ class DatasetAdapterTqdmProgressCallback(DatasetAdapterProgressCallback):
         self._tqdm_bar = tqdm_bar
 
     def on_loop_start(self, total_steps: int):
-        super().on_loop_start(total_steps)
         self.tqdm_bar = tqdm.tqdm(total=total_steps, desc=self.desc)
 
     def on_loop_end(self):
-        super().on_loop_end()
         self.tqdm_bar.close()
         self.tqdm_bar = None
 
-    def on_step_end(self, current_step: int):
-        super().on_step_end(current_step)
-        self.tqdm_bar.update(self.current_step - self.tqdm_bar.n)
+    def on_step_end(self, current_step: int = None):
+        self.tqdm_bar.update(1 if current_step is None else current_step - self.tqdm_bar.n)
