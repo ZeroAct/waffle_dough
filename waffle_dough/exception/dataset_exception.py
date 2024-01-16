@@ -29,6 +29,14 @@ class DatasetAdapterTaskError(DatasetAdapterError):
     """Exception raised for errors in the dataset adapter task."""
 
 
+class DatasetAdapterImportError(DatasetAdapterError):
+    """Exception raised for errors in the dataset adapter task."""
+
+
+class DatasetAdapterExportError(DatasetAdapterError):
+    """Exception raised for errors in the dataset adapter task."""
+
+
 class DatasetAdapterAlreadyExistsError(DatasetAdapterError):
     """Exception raised for errors in the dataset adapter task."""
 

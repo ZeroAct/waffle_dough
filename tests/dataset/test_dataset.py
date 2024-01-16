@@ -3,6 +3,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
+from waffle_utils.file import io, network
 
 from waffle_dough.dataset.dataset import WaffleDataset
 from waffle_dough.exception.database_exception import *
@@ -269,49 +270,63 @@ def test_waffle_dataset_visualize(tmpdir, sample_image_paths):
 
 
 # convert
-def test_waffle_dataset_coco(tmpdir, sample_image_paths):
-    coco = {
-        "categories": [
-            {"id": 1, "name": "dog"},
-            {"id": 2, "name": "cat"},
-        ],
-        "images": [
-            {"id": 1, "file_name": "dog.png", "width": 300, "height": 300},
-            {"id": 2, "file_name": "cat.png", "width": 300, "height": 300},
-            {"id": 3, "file_name": "cat2.png", "width": 300, "height": 300},
-            {"id": 4, "file_name": "cat3.png", "width": 300, "height": 300},
-            {"id": 5, "file_name": "cat4.png", "width": 300, "height": 300},
-        ],
-        "annotations": [
-            {"id": 1, "image_id": 1, "category_id": 1, "bbox": [50, 50, 50, 50]},
-            {"id": 2, "image_id": 2, "category_id": 1, "bbox": [80, 80, 100, 100]},
-            {"id": 3, "image_id": 2, "category_id": 2, "bbox": [120, 120, 100, 100]},
-        ],
-    }
+@pytest.mark.parametrize(
+    "file_name, task",
+    [
+        ("mnist.zip", "object_detection"),
+        ("mnist.zip", "semantic_segmentation"),
+        ("mnist.zip", "instance_segmentation"),
+    ],
+)
+def test_waffle_dataset_coco(tmpdir, file_name, task):
+    dataset_url = f"https://github.com/snuailab/assets/raw/main/waffle/sample_dataset/{file_name}"
+    dataset_path = tmpdir / file_name
+    coco_dir = tmpdir / Path(file_name).stem
 
-    image_dir = tmpdir / "coco_images"
-    image_dir.mkdir()
-    for image in coco["images"]:
-        img = np.random.randint(0, 255, (300, 300, 3), dtype=np.uint8)
-        cv2.imwrite(str(image_dir / image["file_name"]), img)
+    network.get_file_from_url(dataset_url, dataset_path)
+    io.unzip(dataset_path, coco_dir, create_directory=True)
 
-    dataset1 = WaffleDataset.new("test1", task="object_detection", root_dir=tmpdir)
-    dataset1.import_coco(
-        coco=coco,
-        coco_image_dir=image_dir,
-    )
+    dataset1 = WaffleDataset.new("test1", task=task, root_dir=tmpdir)
+    dataset1.import_coco(coco=coco_dir / "coco.json", coco_image_dir=coco_dir / "images")
+    dataset1.visualize()
+    export_dir = dataset1.export("coco")
+    assert Path(export_dir).exists()
 
-    dataset1.visualize(result_dir="/home/zero/ws/waffle_dough/vis")
+    dataset2 = WaffleDataset.new("test2", task=task, root_dir=tmpdir)
+    for coco_file in Path(export_dir).glob("*.json"):
+        dataset2.import_coco(coco=coco_file, coco_image_dir=Path(export_dir) / "images")
+    dataset2.visualize()
 
-    export_dir = Path(dataset1.export("coco", result_dir=tmpdir / "coco"))
-    assert export_dir.exists()
+    assert len(dataset1.get_images()) == len(dataset2.get_images())
+    assert len(dataset1.get_categories()) == len(dataset2.get_categories())
+    assert len(dataset1.get_annotations()) == len(dataset2.get_annotations())
 
-    dataset2 = WaffleDataset.new("test2", task="object_detection", root_dir=tmpdir)
-    for split in SplitType:
-        dataset2.import_coco(
-            coco=export_dir / f"{split.lower()}.json",
-            coco_image_dir=export_dir / "images",
-        )
+
+@pytest.mark.parametrize(
+    "file_name, task",
+    [
+        ("mnist_yolo_object_detection.zip", "object_detection"),
+        ("mnist_yolo_classification.zip", "classification"),
+        ("mnist_yolo_instance_segmentation.zip", "instance_segmentation"),
+    ],
+)
+def test_waffle_dataset_yolo(tmpdir, file_name, task):
+    dataset_url = f"https://github.com/snuailab/assets/raw/main/waffle/sample_dataset/{file_name}"
+    dataset_path = tmpdir / file_name
+    yolo_dir = tmpdir / Path(file_name).stem
+
+    network.get_file_from_url(dataset_url, dataset_path)
+    io.unzip(dataset_path, yolo_dir, create_directory=True)
+
+    dataset1 = WaffleDataset.new("test1", task=task, root_dir=tmpdir)
+    dataset1.import_yolo(yolo_root_dir=yolo_dir)
+    dataset1.visualize()
+    export_dir = dataset1.export("yolo")
+    assert Path(export_dir).exists()
+
+    dataset2 = WaffleDataset.new("test2", task=task, root_dir=tmpdir)
+    dataset2.import_yolo(yolo_root_dir=export_dir)
+    dataset2.visualize()
 
     assert len(dataset1.get_images()) == len(dataset2.get_images())
     assert len(dataset1.get_categories()) == len(dataset2.get_categories())

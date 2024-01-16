@@ -32,7 +32,7 @@ from waffle_utils.file import io
 from waffle_utils.logger import datetime_now, initialize_logger
 
 from waffle_dough.database.service import DatabaseService
-from waffle_dough.dataset.adapter import CocoAdapter
+from waffle_dough.dataset.adapter import COCOAdapter, YOLOAdapter
 from waffle_dough.dataset.adapter.callback import (
     BaseDatasetAdapterCallback,
     DatasetAdapterFileProgressCallback,
@@ -542,28 +542,19 @@ class WaffleDataset:
         return dst_dataset
 
     @exception_decorator
-    def import_coco(
+    def import_data(
         self,
-        coco: Union[str, Path, dict],
-        coco_image_dir: Union[str, Path],
-        split: Union[str, SplitType] = SplitType.UNSET,
-        callbacks: list[BaseDatasetAdapterCallback] = None,
+        image_dict: dict[str, ImageInfo],
+        annotation_dict: dict[str, AnnotationInfo],
+        category_dict: dict[str, CategoryInfo],
+        image_dir: Union[str, Path],
+        split: Union[str, SplitType] = None,
     ) -> "WaffleDataset":
-        adapter = CocoAdapter(
-            callbacks=[
-                DatasetAdapterFileProgressCallback(file=self.log_dir / "from_coco.json"),
-                DatasetAdapterTqdmProgressCallback(desc="Importing COCO dataset"),
-            ]
-            + (callbacks if callbacks else [])
-        )
-
-        adapter.import_target(coco)
-
         category_name_to_id = {cat.name: cat.id for cat in self.categories}
 
         new_filtered_categories = []
         new_id_to_old_id = {}
-        for category in adapter.category_dict.values():
+        for category in category_dict.values():
             if category.name in category_name_to_id:
                 new_id_to_old_id[category.id] = category_name_to_id[category.name]
                 category.id = category_name_to_id[category.name]
@@ -573,18 +564,74 @@ class WaffleDataset:
 
         image_path = []
         image_infos = []
-        for image in adapter.image_dict.values():
-            image_path.append(Path(coco_image_dir, image.original_file_name))
-            image.split = SplitType.from_str(split) if split else SplitType.UNSET
+        for image in image_dict.values():
+            image_path.append(Path(image_dir, image.original_file_name))
+            if split is not None:
+                image.split = SplitType.from_str(split) if split else SplitType.UNSET
             image_infos.append(image)
         self.add_image(image_path, image_infos)
 
         new_annotations = []
-        for annotation in adapter.annotation_dict.values():
+        for annotation in annotation_dict.values():
             if annotation.category_id in new_id_to_old_id:
                 annotation.category_id = new_id_to_old_id[annotation.category_id]
             new_annotations.append(annotation)
         self.add_annotation(new_annotations)
+
+    @exception_decorator
+    def import_coco(
+        self,
+        coco: Union[str, Path, dict],
+        coco_image_dir: Union[str, Path],
+        split: Union[str, SplitType] = None,
+        callbacks: list[BaseDatasetAdapterCallback] = None,
+    ) -> "WaffleDataset":
+        adapter = COCOAdapter(
+            task=self.task,
+            callbacks=[
+                DatasetAdapterFileProgressCallback(file=self.log_dir / "from_coco.json"),
+                DatasetAdapterTqdmProgressCallback(desc="Importing COCO dataset"),
+            ]
+            + (callbacks if callbacks else []),
+        )
+
+        adapter.import_target(coco)
+
+        self.import_data(
+            image_dict=adapter.image_dict,
+            annotation_dict=adapter.annotation_dict,
+            category_dict=adapter.category_dict,
+            image_dir=coco_image_dir,
+            split=split,
+        )
+
+        return self
+
+    @exception_decorator
+    def import_yolo(
+        self,
+        yolo_root_dir: Union[str, Path],
+        split: Union[str, SplitType] = None,
+        callbacks: list[BaseDatasetAdapterCallback] = None,
+    ) -> "WaffleDataset":
+        adapter = YOLOAdapter(
+            task=self.task,
+            callbacks=[
+                DatasetAdapterFileProgressCallback(file=self.log_dir / "from_yolo.json"),
+                DatasetAdapterTqdmProgressCallback(desc="Importing YOLO dataset"),
+            ]
+            + (callbacks if callbacks else []),
+        )
+
+        adapter.import_target(yolo_root_dir)
+
+        self.import_data(
+            image_dict=adapter.image_dict,
+            annotation_dict=adapter.annotation_dict,
+            category_dict=adapter.category_dict,
+            image_dir=yolo_root_dir,
+            split=split,
+        )
 
         return self
 
@@ -608,7 +655,8 @@ class WaffleDataset:
         logger.info(f"Exporting dataset [{self.name}] to COCO format to {result_dir}")
 
         if data_type == DataType.COCO:
-            adapter = CocoAdapter(
+            adapter = COCOAdapter(
+                task=self.task,
                 image_dict=self.image_dict,
                 annotation_dict=self.annotation_dict,
                 category_dict=self.category_dict,
@@ -618,12 +666,21 @@ class WaffleDataset:
                 ]
                 + (callbacks if callbacks else []),
             )
-            split_coco = adapter.to_target()
+            adapter.export_target(result_dir, self.image_dir)
 
-            for split, coco in split_coco.items():
-                io.save_json(coco, result_dir / f"{split.lower()}.json")
-
-            io.copy_files_to_directory(self.image_dir, result_dir / "images", create_directory=True)
+        elif data_type == DataType.YOLO:
+            adapter = YOLOAdapter(
+                task=self.task,
+                image_dict=self.image_dict,
+                annotation_dict=self.annotation_dict,
+                category_dict=self.category_dict,
+                callbacks=[
+                    DatasetAdapterFileProgressCallback(file=self.log_dir / "export.json"),
+                    DatasetAdapterTqdmProgressCallback(desc="Exporting dataset to YOLO format"),
+                ]
+                + (callbacks if callbacks else []),
+            )
+            adapter.export_target(result_dir, image_path_getter=self.get_image_path)
 
         else:
             raise DatasetAdapterNotFoundError(

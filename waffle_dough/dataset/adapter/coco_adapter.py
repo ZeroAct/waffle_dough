@@ -1,7 +1,9 @@
-from pathlib import Path
+import os
+from pathlib import Path, PurePath
 from typing import Union
 
 from pycocotools.coco import COCO
+from waffle_utils.file import io
 
 from waffle_dough.exception import *
 from waffle_dough.field import AnnotationInfo, CategoryInfo, ImageInfo
@@ -11,7 +13,7 @@ from waffle_dough.type import SegmentationType, SplitType, TaskType
 from .base_adapter import BaseAdapter
 
 
-class CocoAdapter(BaseAdapter):
+class COCOAdapter(BaseAdapter):
     def __init__(
         self,
         image_dict: dict[str, ImageInfo] = None,
@@ -42,13 +44,16 @@ class CocoAdapter(BaseAdapter):
     def import_target(
         self,
         coco_dataset: Union[str, dict],
-    ) -> "CocoAdapter":
-        if isinstance(coco_dataset, (str, Path)):
-            coco = COCO(coco_dataset)
-        elif isinstance(coco_dataset, dict):
-            coco = COCO()
-            coco.dataset = coco_dataset
-            coco.createIndex()
+    ) -> "COCOAdapter":
+        try:
+            if isinstance(coco_dataset, dict):
+                coco = COCO()
+                coco.dataset = coco_dataset
+                coco.createIndex()
+            else:
+                coco = COCO(str(coco_dataset))
+        except Exception as e:
+            raise DatasetAdapterImportError(f"Failed to import COCO dataset") from e
 
         self.run_callback_hooks("on_loop_start", len(coco.cats) + len(coco.imgs) + len(coco.anns))
 
@@ -107,7 +112,7 @@ class CocoAdapter(BaseAdapter):
                     for j, point in enumerate(segmentation_):
                         segmentation[i][j] = point / W if j % 2 == 0 else point / H
 
-                ann = AnnotationInfo.instance_segmentation(
+                ann = getattr(AnnotationInfo, self.task.lower())(
                     image_id=img.id,
                     category_id=cat,
                     segmentation=segmentation,
@@ -126,7 +131,7 @@ class CocoAdapter(BaseAdapter):
 
         return self
 
-    def to_target(self) -> dict:
+    def export_target(self, result_dir: Union[str, Path], image_dir: Union[str, Path]) -> str:
 
         self.run_callback_hooks(
             "on_loop_start",
@@ -227,6 +232,14 @@ class CocoAdapter(BaseAdapter):
                     }
                 )
             self.run_callback_hooks("on_step_end")
+
+        # save
+        result_dir = Path(result_dir)
+        for split, coco in split_coco.items():
+            io.save_json(coco, result_dir / f"{split.lower()}.json")
+
+        io.copy_files_to_directory(image_dir, result_dir / "images", create_directory=True)
+
         self.run_callback_hooks("on_loop_end")
 
-        return split_coco
+        return str(result_dir)

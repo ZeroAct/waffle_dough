@@ -152,6 +152,87 @@ def visualize_object_detection(
     return _convert_to_numpy(pil_image)
 
 
+def visualize_instance_segmentation(
+    image: np.ndarray,
+    annotations: list[AnnotationInfo],
+    category_dict: dict[CategoryInfo],
+    image_info: ImageInfo,
+    color_map: dict[str, list[int]],
+    scale: float = 1.0,
+    opacity: float = 0.2,
+) -> np.ndarray:
+
+    pil_image = _convert_to_pil(image)
+    draw = ImageDraw.Draw(pil_image, "RGBA")
+    font = _get_font(scale)
+
+    W, H = image_info.width, image_info.height
+
+    for i, annotation in enumerate(annotations):
+        category = category_dict[annotation.category_id]
+        color = tuple(color_map[annotation.category_id])
+        text = f"{category.name}" + (f": {annotation.score}" if annotation.score is not None else "")
+
+        for segmentation in annotation.segmentation:
+            if isinstance(segmentation, list):
+                segmentation = np.array(segmentation).reshape((-1, 2))
+            elif isinstance(segmentation, dict):
+                segmentation = np.array(segmentation["counts"]).reshape((-1, 2))
+            else:
+                raise BaseException("segmentation must be list or dict.")
+
+            segmentation[:, 0] = segmentation[:, 0] * W
+            segmentation[:, 1] = segmentation[:, 1] * H
+
+            draw.polygon(
+                segmentation.flatten().tolist(),
+                fill=color + (int(127 * opacity),),
+                outline=color,
+                width=round(2 * scale),
+            )
+
+        x1, y1, w, h = annotation.bbox
+        x2, y2 = x1 + w, y1 + h
+        x1, y1, x2, y2 = round(x1 * W), round(y1 * H), round(x2 * W), round(y2 * H)
+
+        draw.rectangle(
+            (x1, y1, x2, y2),
+            fill=color + (int(127 * opacity),),
+            outline=color,
+            width=round(2 * scale),
+        )
+
+        text_box = draw.textbbox((x1, y1), text, font=font)
+        th = text_box[3] - text_box[1]
+        th = round(th * 1.25)
+        pad = round(th * 0.1)
+        text_box = (text_box[0], text_box[1] - th - pad, text_box[2], text_box[3] - th + pad)
+        draw.rectangle(text_box, fill=color, outline=color, width=round(2 * scale))
+        draw.text(text_box[:2], text, (255, 255, 255), font=font)
+
+    return _convert_to_numpy(pil_image)
+
+
+def visualize_semantic_segmentation(
+    image: np.ndarray,
+    annotations: list[AnnotationInfo],
+    category_dict: dict[CategoryInfo],
+    image_info: ImageInfo,
+    color_map: dict[str, list[int]],
+    scale: float = 1.0,
+    opacity: float = 0.2,
+) -> np.ndarray:
+    return visualize_instance_segmentation(
+        image=image,
+        annotations=annotations,
+        category_dict=category_dict,
+        image_info=image_info,
+        color_map=color_map,
+        scale=scale,
+        opacity=opacity,
+    )
+
+
 def visualize(
     image: np.ndarray,
     annotations: Union[AnnotationInfo, list[AnnotationInfo], dict, list[dict]],
@@ -247,5 +328,17 @@ def visualize(
             scale,
             **{"opacity": opacity} if opacity is not None else {},
         )
+    elif task in [TaskType.INSTANCE_SEGMENTATION, TaskType.SEMANTIC_SEGMENTATION]:
+        result = visualize_instance_segmentation(
+            result,
+            annotations,
+            category_dict,
+            image_info,
+            color_map,
+            scale,
+            **{"opacity": opacity} if opacity is not None else {},
+        )
+    else:
+        raise BaseException(f"Visualizing task[{task}] is not supported.")
 
     return result

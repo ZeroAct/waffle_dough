@@ -2,7 +2,7 @@ from pathlib import Path
 
 from waffle_utils.file import io
 
-from . import DatasetAdapterProgressCallback
+from .progress import DatasetAdapterProgressCallback
 
 
 class DatasetAdapterFileProgressCallback(DatasetAdapterProgressCallback):

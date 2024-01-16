@@ -94,7 +94,7 @@ class ImageInfo(BaseField):
             ext=Path(original_file_name).suffix.lower(),
             width=width,
             height=height,
-            original_file_name=original_file_name,
+            original_file_name=str(original_file_name),
             date_captured=date_captured,
             split=split,
         )
