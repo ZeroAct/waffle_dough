@@ -1,0 +1,10 @@
+shapely>=2.0.1
+opencv-python>=4.7.0
+numpy>=1.23.0
+pycocotools>=2.0.6
+tqdm>=4.60.0
+python-dotenv==1.0.0
+pydantic>=2.4.1
+sqlalchemy==2.0.22
+
+waffle-utils==1.1.0a3

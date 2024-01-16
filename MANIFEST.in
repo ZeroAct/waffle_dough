@@ -1,0 +1,6 @@
+include *.md
+include requirements.txt
+include LICENSE
+include setup.py
+recursive-include waffle_dough *.yaml
+recursive-exclude __pycache__ *
