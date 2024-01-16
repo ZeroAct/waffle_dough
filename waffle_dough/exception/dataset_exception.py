@@ -17,6 +17,10 @@ class DatasetAlreadyExistsError(DatasetException):
     """Exception raised for errors trying to create a dataset that already exists."""
 
 
+class DatasetCRUDError(DatasetException):
+    """Exception raised for errors trying to export a dataset."""
+
+
 class DatasetImportError(DatasetException):
     """Exception raised for errors trying to import a dataset."""
 

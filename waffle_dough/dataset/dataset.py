@@ -25,8 +25,10 @@ import random
 from dataclasses import asdict, dataclass
 from functools import cached_property
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Union
 
+import numpy as np
 from tqdm import tqdm
 from waffle_utils.file import io
 from waffle_utils.logger import datetime_now, initialize_logger
@@ -80,6 +82,28 @@ class DatasetInfo:
             categories=dataset_info["categories"],
             created_at=dataset_info["created_at"],
             updated_at=dataset_info["updated_at"],
+        )
+
+
+@dataclass
+class DatasetStatistics:
+    num_images: int
+    num_annotations: int
+    num_categories: int
+    num_images_per_category: dict[str, int]
+    num_annotations_per_category: dict[str, int]
+
+    def to_dict(self):
+        return asdict(self)
+
+    @staticmethod
+    def from_dict(dataset_statistics: dict):
+        return DatasetStatistics(
+            num_images=dataset_statistics["num_images"],
+            num_annotations=dataset_statistics["num_annotations"],
+            num_categories=dataset_statistics["num_categories"],
+            num_images_per_category=dataset_statistics["num_images_per_category"],
+            num_annotations_per_category=dataset_statistics["num_annotations_per_category"],
         )
 
 
@@ -229,6 +253,10 @@ class WaffleDataset:
         return self.database_service.get_categories()
 
     @property
+    def category_name_dict(self) -> dict[str, CategoryInfo]:
+        return {category.name: category for category in self.categories}
+
+    @property
     def categories(self) -> list[CategoryInfo]:
         return list(self.category_dict.values())
 
@@ -275,39 +303,47 @@ class WaffleDataset:
     @exception_decorator
     def add_image(
         self,
-        image: Union[str, Path],
+        image: Union[str, Path, np.ndarray],
         image_info: Union[ImageInfo, list[ImageInfo], dict, list[dict]] = None,
     ) -> list[ImageInfo]:
         images = image if isinstance(image, list) else [image]
+
         if image_info is None:
-            image_infos = []
-            for image in images:
-                img = image_io.cv2_imread(image)
-                image_infos.append(
-                    ImageInfo(
-                        ext=Path(image).suffix,
-                        width=img.shape[1],
-                        height=img.shape[0],
-                        original_file_name=str(image),
-                        task=TaskType.AGNOSTIC,
-                    )
-                )
-        else:
-            image_infos = []
-            for image_info in image_info if isinstance(image_info, list) else [image_info]:
-                if isinstance(image_info, dict):
-                    image_info = ImageInfo.from_dict(task=TaskType.AGNOSTIC, d=image_info)
-                if image_info.task != TaskType.AGNOSTIC:
-                    raise DatasetTaskError(f"Invalid task: {image_info.task}")
-                image_infos.append(image_info)
+            image_info = [None] * len(images)
+        image_infos = image_info if isinstance(image_info, list) else [image_info]
 
-            if len(images) != len(image_infos):
-                raise DatasetImportError(f"Number of images and image_infos must be same")
+        for i, (image, image_info) in enumerate(zip(images, image_infos)):
+            temp_file = None
+            if isinstance(image, np.ndarray):
+                np_image = image
+                original_file_name = f"waffle_{i}.png"
+                temp_file = NamedTemporaryFile(suffix=".png")
+                image_path = temp_file.name
+                image_io.cv2_imwrite(image_path, np_image)
+            else:
+                np_image = image_io.cv2_imread(image)
+                original_file_name = str(image)
+                image_path = str(image)
 
-        for image, image_info in zip(images, image_infos):
             if isinstance(image_info, dict):
                 image_info = ImageInfo.from_dict(task=TaskType.AGNOSTIC, d=image_info)
-            self.database_service.add_image(image, image_info)
+            elif isinstance(image_info, ImageInfo):
+                pass
+            elif image_info is None:
+                image_info = ImageInfo.agnostic(
+                    width=np_image.shape[1],
+                    height=np_image.shape[0],
+                    original_file_name=original_file_name,
+                )
+            else:
+                raise DatasetCRUDError(f"Invalid image info: {image_info}")
+
+            image_infos[i] = image_info
+
+            self.database_service.add_image(image_path, image_info)
+
+            if temp_file is not None:
+                temp_file.close()
 
         return image_infos
 
@@ -394,6 +430,35 @@ class WaffleDataset:
     @exception_decorator
     def get_categories(self, category_id: Union[str, list[str]] = None) -> list[CategoryInfo]:
         return list(self.get_category_dict(category_id=category_id).values())
+
+    @exception_decorator
+    def get_statistics(self, split: Union[str, SplitType] = None) -> DatasetStatistics:
+        num_annotations_per_category = {}
+        num_images_per_category = {}
+
+        category_dict = self.get_category_dict()
+        for category in self.category_dict.values():
+            num_annotations_per_category[category.name] = 0
+            num_images_per_category[category.name] = set()
+
+        for annotation in self.annotations:
+            num_annotations_per_category[category_dict[annotation.category_id].name] += 1
+            num_images_per_category[category_dict[annotation.category_id].name].add(
+                annotation.image_id
+            )
+
+        num_images_per_category = {
+            category_name: len(image_ids)
+            for category_name, image_ids in num_images_per_category.items()
+        }
+
+        return DatasetStatistics(
+            num_images=len(self.images),
+            num_annotations=len(self.annotations),
+            num_categories=len(self.categories),
+            num_images_per_category=num_images_per_category,
+            num_annotations_per_category=num_annotations_per_category,
+        )
 
     @exception_decorator
     def get_mapper(

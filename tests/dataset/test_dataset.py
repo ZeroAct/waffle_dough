@@ -95,7 +95,7 @@ def test_waffle_dataset_crud(tmpdir, sample_image_paths):
     dataset.add_image(sample_image_paths[0])
     assert len(dataset.get_images()) == len(dataset.get_image_dict()) == 1
 
-    dataset.add_image(sample_image_paths[1])
+    dataset.add_image(cv2.imread(sample_image_paths[1]))
     assert len(dataset.get_images()) == len(dataset.get_image_dict()) == 2
 
     image_id = list(dataset.get_image_dict().keys())[0]
@@ -331,3 +331,35 @@ def test_waffle_dataset_yolo(tmpdir, file_name, task):
     assert len(dataset1.get_images()) == len(dataset2.get_images())
     assert len(dataset1.get_categories()) == len(dataset2.get_categories())
     assert len(dataset1.get_annotations()) == len(dataset2.get_annotations())
+
+
+def test_waffle_dataset_statistic(tmpdir, sample_image_paths):
+    dataset = WaffleDataset.new("test1", task="classification", root_dir=tmpdir)
+    stat = dataset.get_statistics()
+    assert stat.num_images == stat.num_annotations == stat.num_categories == 0
+
+    images = dataset.add_image(sample_image_paths)
+    stat = dataset.get_statistics()
+    assert stat.num_images == len(sample_image_paths)
+
+    category1 = dataset.add_category(category_info=CategoryInfo.classification(name="test"))[0]
+    stat = dataset.get_statistics()
+    assert stat.num_categories == 1
+
+    dataset.add_annotation(
+        annotation_info=[
+            AnnotationInfo.classification(
+                image_id=image.id,
+                category_id=category1.id,
+            )
+            for image in images
+        ]
+    )
+    stat = dataset.get_statistics()
+    assert stat.num_annotations == len(sample_image_paths)
+
+    category2 = dataset.add_category(category_info=CategoryInfo.classification(name="test2"))[0]
+    stat = dataset.get_statistics()
+    assert stat.num_categories == 2
+    assert stat.num_annotations_per_category[category1.name] == len(sample_image_paths)
+    assert stat.num_annotations_per_category[category2.name] == 0
