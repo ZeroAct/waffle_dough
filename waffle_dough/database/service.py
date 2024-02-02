@@ -31,38 +31,58 @@ class DatabaseService:
         self.image_directory = Path(image_directory)
 
     # Create
-    def add_image(self, image: str, image_info: ImageInfo) -> ImageInfo:
+    def add_image(
+        self, image: Union[str, list[str]], image_info: Union[ImageInfo, list[ImageInfo]]
+    ) -> list[ImageInfo]:
+        images = image if isinstance(image, list) else [image]
+        image_infos = image_info if isinstance(image_info, list) else [image_info]
+
         with self.Session() as session:
-            io.copy_file(image, self.get_image_path(image_info), create_directory=True)
+            for image, image_info in zip(images, image_infos):
+                io.copy_file(image, self.get_image_path(image_info), create_directory=True)
+
             try:
-                image_info = image_repository.create(session, image_info)
+                image_infos = image_repository.create(session, image_infos)
             except Exception as e:
                 io.remove_file(self.get_image_path(image_info))
                 raise e
 
-        return ImageInfo.model_validate(image_info, from_attributes=True)
+            return [
+                ImageInfo.model_validate(image_info, from_attributes=True)
+                for image_info in image_infos
+            ]
 
-    def add_category(self, category_info: CategoryInfo) -> CategoryInfo:
+    def add_category(
+        self, category_info: Union[CategoryInfo, list[CategoryInfo]]
+    ) -> list[CategoryInfo]:
         with self.Session() as session:
-            category = category_repository.create(session, category_info)
+            categories = category_repository.create(session, category_info)
 
-        return CategoryInfo.model_validate(category, from_attributes=True)
+            return [
+                CategoryInfo.model_validate(category, from_attributes=True)
+                for category in categories
+            ]
 
-    def add_annotation(self, annotation_info: AnnotationInfo) -> AnnotationInfo:
+    def add_annotation(
+        self, annotation_info: Union[AnnotationInfo, list[AnnotationInfo]]
+    ) -> list[AnnotationInfo]:
         with self.Session() as session:
-            annotation = annotation_repository.create(session, annotation_info)
+            annotations = annotation_repository.create(session, annotation_info)
 
-        return AnnotationInfo.model_validate(annotation, from_attributes=True)
+            return [
+                AnnotationInfo.model_validate(annotation, from_attributes=True)
+                for annotation in annotations
+            ]
 
     # Read (Unit)
     def get_image(self, image_id: str) -> ImageInfo:
         with self.Session() as session:
             image = image_repository.get(session, image_id)
 
-        if image is None:
-            raise DatabaseNotFoundError(f"image does not exist: {image_id}")
+            if image is None:
+                raise DatabaseNotFoundError(f"image does not exist: {image_id}")
 
-        return ImageInfo.model_validate(image, from_attributes=True)
+            return ImageInfo.model_validate(image, from_attributes=True)
 
     def get_image_path(self, image_info: ImageInfo) -> Path:
         return Path(self.image_directory, f"{image_info.id}{image_info.ext}")
@@ -71,19 +91,19 @@ class DatabaseService:
         with self.Session() as session:
             category = category_repository.get(session, category_id)
 
-        if category is None:
-            raise DatabaseNotFoundError(f"category does not exist: {category_id}")
+            if category is None:
+                raise DatabaseNotFoundError(f"category does not exist: {category_id}")
 
-        return CategoryInfo.model_validate(category, from_attributes=True)
+            return CategoryInfo.model_validate(category, from_attributes=True)
 
     def get_annotation(self, annotation_id: str) -> AnnotationInfo:
         with self.Session() as session:
             annotation = annotation_repository.get(session, annotation_id)
 
-        if annotation is None:
-            raise DatabaseNotFoundError(f"annotation does not exist: {annotation_id}")
+            if annotation is None:
+                raise DatabaseNotFoundError(f"annotation does not exist: {annotation_id}")
 
-        return AnnotationInfo.model_validate(annotation, from_attributes=True)
+            return AnnotationInfo.model_validate(annotation, from_attributes=True)
 
     # Read (Multi)
     def _get_query_dict(
@@ -139,106 +159,124 @@ class DatabaseService:
 
         return query_dict
 
-    def _get_multi(self, repository, **kwargs) -> List[Any]:
-        with self.Session() as session:
-            objs = repository.get_multi(session, **self._get_query_dict(**kwargs))
-
+    def _get_multi(self, session, repository, **kwargs) -> List[Any]:
+        objs = repository.get_multi(session, **self._get_query_dict(**kwargs))
         return objs
 
-    def _get_count(self, repository, **kwargs) -> int:
-        with self.Session() as session:
-            count = repository.get_count(session, **self._get_query_dict(**kwargs))
-
+    def _get_count(self, session, repository, **kwargs) -> int:
+        count = repository.get_count(session, **self._get_query_dict(**kwargs))
         return count
 
     def get_images(
         self, image_id: Union[str, list[str]] = None, split: SplitType = None, **kwargs
     ) -> dict[str, ImageInfo]:
-        images = self._get_multi(image_repository, id=image_id, split=split, **kwargs)
-        return {image.id: ImageInfo.model_validate(image, from_attributes=True) for image in images}
+        with self.Session() as session:
+            images = self._get_multi(session, image_repository, id=image_id, split=split, **kwargs)
+            return {
+                image.id: ImageInfo.model_validate(image, from_attributes=True) for image in images
+            }
 
     def get_categories(
         self, category_id: Union[str, list[str]] = None, **kwargs
     ) -> dict[str, CategoryInfo]:
-        categories = self._get_multi(category_repository, id=category_id, **kwargs)
-        return {
-            category.id: CategoryInfo.model_validate(category, from_attributes=True)
-            for category in categories
-        }
+        with self.Session() as session:
+            categories = self._get_multi(session, category_repository, id=category_id, **kwargs)
+            return {
+                category.id: CategoryInfo.model_validate(category, from_attributes=True)
+                for category in categories
+            }
 
     def get_annotations(
         self, annotation_id: Union[str, list[str]] = None, **kwargs
     ) -> dict[str, AnnotationInfo]:
-        annotations = self._get_multi(annotation_repository, id=annotation_id, **kwargs)
-        return {
-            annotation.id: AnnotationInfo.model_validate(annotation, from_attributes=True)
-            for annotation in annotations
-        }
+        with self.Session() as session:
+            annotations = self._get_multi(session, annotation_repository, id=annotation_id, **kwargs)
+            return {
+                annotation.id: AnnotationInfo.model_validate(annotation, from_attributes=True)
+                for annotation in annotations
+            }
 
     # Read with relations
     def get_images_by_category_id(
         self, category_id: Union[str, list[str]], split: SplitType = None
     ) -> dict[str, ImageInfo]:
-        annotations = self._get_multi(annotation_repository, category_id=category_id)
-        image_ids = list(set(map(lambda annotation: annotation.image_id, annotations)))
-        images = self._get_multi(image_repository, id=image_ids, split=split)
-        return {image.id: ImageInfo.model_validate(image, from_attributes=True) for image in images}
+        with self.Session() as session:
+            annotations = self._get_multi(session, annotation_repository, category_id=category_id)
+            image_ids = list(set(map(lambda annotation: annotation.image_id, annotations)))
+            images = self._get_multi(session, image_repository, id=image_ids, split=split)
+            return {
+                image.id: ImageInfo.model_validate(image, from_attributes=True) for image in images
+            }
 
     def get_images_by_annotation_id(
         self, annotation_id: Union[str, list[str]], split: SplitType = None
     ) -> dict[str, ImageInfo]:
-        annotations = self._get_multi(annotation_repository, annotation_id=annotation_id)
-        image_ids = list(set(map(lambda annotation: annotation.image_id, annotations)))
-        images = self._get_multi(image_repository, id=image_ids, split=split)
-        return {image.id: ImageInfo.model_validate(image, from_attributes=True) for image in images}
+        with self.Session() as session:
+            annotations = self._get_multi(
+                session, annotation_repository, annotation_id=annotation_id
+            )
+            image_ids = list(set(map(lambda annotation: annotation.image_id, annotations)))
+            images = self._get_multi(session, image_repository, id=image_ids, split=split)
+            return {
+                image.id: ImageInfo.model_validate(image, from_attributes=True) for image in images
+            }
 
     def get_categories_by_annotation_id(
         self, annotation_id: Union[str, list[str]]
     ) -> dict[str, CategoryInfo]:
-        annotations = self._get_multi(annotation_repository, annotation_id=annotation_id)
-        category_ids = list(set(map(lambda annotation: annotation.category_id, annotations)))
-        categories = self._get_multi(category_repository, id=category_ids)
-        return {
-            category.id: CategoryInfo.model_validate(category, from_attributes=True)
-            for category in categories
-        }
+        with self.Session() as session:
+            annotations = self._get_multi(
+                session, annotation_repository, annotation_id=annotation_id
+            )
+            category_ids = list(set(map(lambda annotation: annotation.category_id, annotations)))
+            categories = self._get_multi(session, category_repository, id=category_ids)
+            return {
+                category.id: CategoryInfo.model_validate(category, from_attributes=True)
+                for category in categories
+            }
 
     def get_categories_by_image_id(self, image_id: Union[str, list[str]]) -> dict[str, CategoryInfo]:
-        annotations = self._get_multi(annotation_repository, image_id=image_id)
-        category_ids = list(set(map(lambda annotation: annotation.category_id, annotations)))
-        categories = self._get_multi(category_repository, id=category_ids)
-        return {
-            category.id: CategoryInfo.model_validate(category, from_attributes=True)
-            for category in categories
-        }
+        with self.Session() as session:
+            annotations = self._get_multi(session, annotation_repository, image_id=image_id)
+            category_ids = list(set(map(lambda annotation: annotation.category_id, annotations)))
+            categories = self._get_multi(session, category_repository, id=category_ids)
+            return {
+                category.id: CategoryInfo.model_validate(category, from_attributes=True)
+                for category in categories
+            }
 
     def get_annotations_by_image_id(
         self, image_id: Union[str, list[str]]
     ) -> dict[str, AnnotationInfo]:
-        annotations = self._get_multi(annotation_repository, image_id=image_id)
-        return {
-            annotation.id: AnnotationInfo.model_validate(annotation, from_attributes=True)
-            for annotation in annotations
-        }
+        with self.Session() as session:
+            annotations = self._get_multi(session, annotation_repository, image_id=image_id)
+            return {
+                annotation.id: AnnotationInfo.model_validate(annotation, from_attributes=True)
+                for annotation in annotations
+            }
 
     def get_annotations_by_category_id(
         self, category_id: Union[str, list[str]]
     ) -> dict[str, AnnotationInfo]:
-        annotations = self._get_multi(annotation_repository, category_id=category_id)
-        return {
-            annotation.id: AnnotationInfo.model_validate(annotation, from_attributes=True)
-            for annotation in annotations
-        }
+        with self.Session() as session:
+            annotations = self._get_multi(session, annotation_repository, category_id=category_id)
+            return {
+                annotation.id: AnnotationInfo.model_validate(annotation, from_attributes=True)
+                for annotation in annotations
+            }
 
     # Read custom
     def get_image_count(self, split: SplitType = None, **kwargs) -> int:
-        return self._get_count(image_repository, split=split, **kwargs)
+        with self.Session() as session:
+            return self._get_count(session, image_repository, split=split, **kwargs)
 
     def get_category_count(self) -> int:
-        return self._get_count(category_repository)
+        with self.Session() as session:
+            return self._get_count(session, category_repository)
 
     def get_annotation_count(self) -> int:
-        return self._get_count(annotation_repository)
+        with self.Session() as session:
+            return self._get_count(session, annotation_repository)
 
     def get_image_by_original_file_name(self, original_file_name: str) -> ImageInfo:
         with self.Session() as session:
@@ -246,29 +284,30 @@ class DatabaseService:
                 session, filter_by={"original_file_name": original_file_name}
             )
 
-        if len(image) == 0:
-            raise DatabaseNotFoundError(f"image does not exist: {original_file_name}")
-        elif len(image) > 1:
-            raise DatabaseIntegrityError(f"multiple images exist: {original_file_name}")
+            if len(image) == 0:
+                raise DatabaseNotFoundError(f"image does not exist: {original_file_name}")
+            elif len(image) > 1:
+                raise DatabaseIntegrityError(f"multiple images exist: {original_file_name}")
 
-        return ImageInfo.model_validate(image[0], from_attributes=True)
+            return ImageInfo.model_validate(image[0], from_attributes=True)
 
     def get_category_by_name(self, name: str) -> CategoryInfo:
         with self.Session() as session:
             category = category_repository.get_multi(session, filter_by={"name": name})
 
-        if len(category) == 0:
-            raise DatabaseNotFoundError(f"category does not exist: {name}")
-        elif len(category) > 1:
-            raise DatabaseIntegrityError(f"multiple categories exist: {name}")
+            if len(category) == 0:
+                raise DatabaseNotFoundError(f"category does not exist: {name}")
+            elif len(category) > 1:
+                raise DatabaseIntegrityError(f"multiple categories exist: {name}")
 
-        return CategoryInfo.model_validate(category[0], from_attributes=True)
+            return CategoryInfo.model_validate(category[0], from_attributes=True)
 
     # stats
     def get_image_num_by_category_id(
         self, category_id: Union[str, list[str]] = None
     ) -> dict[str, int]:
-        annotations = self._get_multi(annotation_repository, category_id=category_id)
+        with self.Session() as session:
+            annotations = self._get_multi(session, annotation_repository, category_id=category_id)
 
         image_num_by_category_id = {}
         for annotation in annotations:
@@ -281,7 +320,8 @@ class DatabaseService:
     def get_annotation_num_by_category_id(
         self, category_id: Union[str, list[str]] = None
     ) -> dict[str, int]:
-        annotations = self._get_multi(annotation_repository, category_id=category_id)
+        with self.Session() as session:
+            annotations = self._get_multi(session, annotation_repository, category_id=category_id)
 
         annotation_num_by_category_id = {}
         for annotation in annotations:
@@ -294,7 +334,8 @@ class DatabaseService:
     def get_annotation_num_by_image_id(
         self, image_id: Union[str, list[str]] = None
     ) -> dict[str, int]:
-        annotations = self._get_multi(annotation_repository, image_id=image_id)
+        with self.Session() as session:
+            annotations = self._get_multi(session, annotation_repository, image_id=image_id)
 
         annotation_num_by_image_id = {}
         for annotation in annotations:
@@ -305,41 +346,55 @@ class DatabaseService:
         return annotation_num_by_image_id
 
     # Update
-    def update_image(self, image_id: str, update_image_info: UpdateImageInfo) -> ImageInfo:
+    def update_image(
+        self,
+        image_id: Union[str, list[str]],
+        update_image_info: Union[UpdateImageInfo, list[UpdateImageInfo]],
+    ) -> list[ImageInfo]:
         with self.Session() as session:
             image = image_repository.update(session, image_id, update_image_info)
 
-        return ImageInfo.model_validate(image, from_attributes=True)
+            return [ImageInfo.model_validate(image, from_attributes=True) for image in image]
 
     def update_category(
-        self, category_id: str, update_category_info: UpdateCategoryInfo
-    ) -> CategoryInfo:
+        self,
+        category_id: Union[str, list[str]],
+        update_category_info: Union[UpdateCategoryInfo, list[UpdateCategoryInfo]],
+    ) -> list[CategoryInfo]:
         with self.Session() as session:
             category = category_repository.update(session, category_id, update_category_info)
 
-        return CategoryInfo.model_validate(category, from_attributes=True)
+            return [
+                CategoryInfo.model_validate(category, from_attributes=True) for category in category
+            ]
 
     def update_annotation(
-        self, annotation_id: str, update_annotation_info: UpdateAnnotationInfo
-    ) -> AnnotationInfo:
+        self,
+        annotation_id: Union[str, list[str]],
+        update_annotation_info: Union[UpdateAnnotationInfo, list[UpdateAnnotationInfo]],
+    ) -> list[AnnotationInfo]:
         with self.Session() as session:
             annotation = annotation_repository.update(session, annotation_id, update_annotation_info)
 
-        return AnnotationInfo.model_validate(annotation, from_attributes=True)
+            return [
+                AnnotationInfo.model_validate(annotation, from_attributes=True)
+                for annotation in annotation
+            ]
 
     # Delete
-    def delete_image(self, image_id: str) -> None:
+    def delete_image(self, image_id: Union[str, list[str]]) -> None:
         with self.Session() as session:
-            image_info = image_repository.remove(session, image_id)
+            image_infos = image_repository.remove(session, image_id)
 
-        image_path = self.get_image_path(image_info)
-        if Path(image_path).exists():
-            io.remove_file(image_path)
+        for image_info in image_infos:
+            image_path = self.get_image_path(image_info)
+            if Path(image_path).exists():
+                io.remove_file(image_path)
 
-    def delete_category(self, category_id: str) -> None:
+    def delete_category(self, category_id: Union[str, list[str]]) -> None:
         with self.Session() as session:
             category_repository.remove(session, category_id)
 
-    def delete_annotation(self, annotation_id: str) -> None:
+    def delete_annotation(self, annotation_id: Union[str, list[str]]) -> None:
         with self.Session() as session:
             annotation_repository.remove(session, annotation_id)
