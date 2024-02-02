@@ -42,7 +42,7 @@ def test_crud(db):
         width=100,
         height=100,
     )
-    image = image_repository.create(db, image_info)
+    image = image_repository.create(db, image_info)[0]
     assert len(image_repository.get_multi(db)) == 1
     assert image_repository.get(db, image.id) == image
 
@@ -50,7 +50,7 @@ def test_crud(db):
     category_info = CategoryInfo.classification(
         name="test",
     )
-    category = category_repository.create(db, category_info)
+    category = category_repository.create(db, category_info)[0]
     assert len(category_repository.get_multi(db)) == 1
 
     ## create annotation
@@ -58,7 +58,7 @@ def test_crud(db):
         image_id=image.id,
         category_id=category.id,
     )
-    annotation = annotation_repository.create(db, annotation_info)
+    annotation = annotation_repository.create(db, annotation_info)[0]
     assert len(annotation_repository.get_multi(db)) == 1
 
     annotation_info = AnnotationInfo.classification(
@@ -91,31 +91,31 @@ def test_crud(db):
     category_info = CategoryInfo.classification(
         name="test",
     )
-    category = category_repository.create(db, category_info)
+    category = category_repository.create(db, category_info)[0]
     annotation_info = AnnotationInfo.classification(
         image_id=image.id,
         category_id=category.id,
     )
-    annotation = annotation_repository.create(db, annotation_info)
+    annotation = annotation_repository.create(db, annotation_info)[0]
     image_repository.remove(db, image.id)
     assert len(annotation_repository.get_multi(db)) == 0
 
     # Update
     ## update image
-    image = image_repository.create(db, image_info)
+    image = image_repository.create(db, image_info)[0]
     assert image.split == "unset"
 
     update_image_info = UpdateImageInfo(split="train")
-    image = image_repository.update(db, image.id, update_image_info)
+    image = image_repository.update(db, image.id, update_image_info)[0]
     assert image.split == "train"
 
     ## update category
     update_category_info = UpdateCategoryInfo(name="test2")
-    category = category_repository.update(db, category.id, update_category_info)
+    category = category_repository.update(db, category.id, update_category_info)[0]
     assert category.name == "test2"
 
     ## update annotation
-    annotation = annotation_repository.create(db, annotation_info)
+    annotation = annotation_repository.create(db, annotation_info)[0]
     update_annotation_info = UpdateAnnotationInfo.classification(category_id=category.id)
-    annotation = annotation_repository.update(db, annotation.id, update_annotation_info)
+    annotation = annotation_repository.update(db, annotation.id, update_annotation_info)[0]
     assert annotation.category_id == category.id

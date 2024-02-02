@@ -39,7 +39,7 @@ def add_sample_image(database_service, tmpdir):
             width=image.shape[1],
             height=image.shape[0],
         ),
-    )
+    )[0]
     return image_info
 
 
@@ -48,7 +48,7 @@ def add_sample_category(database_service):
         CategoryInfo.classification(
             name=f"test_{len(database_service.get_categories())}",
         )
-    )
+    )[0]
     return category_info
 
 
@@ -70,7 +70,7 @@ def test_image_crud(tmpdir):
         UpdateImageInfo(
             split="train",
         ),
-    )
+    )[0]
     assert image_info.split == "train"
 
     database_service.delete_image(image_info.id)
@@ -92,7 +92,7 @@ def test_category_crud(tmpdir):
         UpdateCategoryInfo(
             name="test2",
         ),
-    )
+    )[0]
     assert category_info.name == "test2"
 
     database_service.delete_category(category_info.id)
@@ -110,7 +110,7 @@ def test_annotation_crud(tmpdir):
             image_id=image_info.id,
             category_id=category_info.id,
         )
-    )
+    )[0]
     assert database_service.get_annotation_count() == 1
 
     annotation_info = database_service.get_annotation(annotation_info.id)
@@ -139,18 +139,18 @@ def test_advance_read(tmpdir):
             image_id=image_info1.id,
             category_id=category_info1.id,
         )
-    )
-    annotation_info2 = database_service.add_annotation(
-        AnnotationInfo.classification(
-            image_id=image_info2.id,
-            category_id=category_info2.id,
-        )
-    )
-    annotation_info3 = database_service.add_annotation(
-        AnnotationInfo.classification(
-            image_id=image_info3.id,
-            category_id=category_info1.id,
-        )
+    )[0]
+    database_service.add_annotation(
+        [
+            AnnotationInfo.classification(
+                image_id=image_info2.id,
+                category_id=category_info2.id,
+            ),
+            AnnotationInfo.classification(
+                image_id=image_info3.id,
+                category_id=category_info1.id,
+            ),
+        ]
     )
 
     # Test get all
