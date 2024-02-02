@@ -15,7 +15,7 @@ from waffle_dough.field import (
 )
 from waffle_dough.type.split_type import SplitType
 
-from .engine import create_session
+from .engine import conn, create_session, engine
 from .repository import (
     annotation_repository,
     category_repository,
@@ -29,6 +29,14 @@ class DatabaseService:
     def __init__(self, db_url: str, image_directory: Union[str, Path]):
         self.Session = create_session(db_url)
         self.image_directory = Path(image_directory)
+
+    def __del__(self):
+        if conn is not None:
+            conn.close()
+            conn = None
+        if engine is not None:
+            engine.dispose()
+            engine = None
 
     # Create
     def add_image(

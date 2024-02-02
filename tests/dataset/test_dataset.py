@@ -103,14 +103,24 @@ def test_waffle_dataset_crud(tmpdir, sample_image_paths):
     assert len(dataset.get_images()) == len(dataset.get_image_dict()) == 1
 
     # category
-    dataset.add_category(category_info=CategoryInfo.classification(name="test1"))
+    category = dataset.add_category(category_info=CategoryInfo.classification(name="test1"))[0]
     assert len(dataset.get_categories()) == len(dataset.get_category_dict()) == 1
+
+    dataset_info = dataset.get_dataset_info()
+    assert len(dataset_info.categories) == 1
+    assert dataset_info.categories[0]["name"] == "test1"
+
+    dataset.update_category(category.id, CategoryInfo.classification(name="test1_update"))
+    assert dataset.categories[0].name == "test1_update"
+    dataset_info = dataset.get_dataset_info()
+    assert len(dataset_info.categories) == 1
+    assert dataset_info.categories[0]["name"] == "test1_update"
 
     dataset.add_category(category_info={"name": "test2"})
     assert len(dataset.get_categories()) == len(dataset.get_category_dict()) == 2
 
     with pytest.raises(BaseException):
-        dataset.add_category(category_info=CategoryInfo.classification(name="test1"))
+        dataset.add_category(category_info=CategoryInfo.classification(name="test2"))
 
     category_id = list(dataset.get_category_dict().keys())[0]
     dataset.delete_category(category_id)

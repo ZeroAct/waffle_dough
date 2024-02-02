@@ -126,11 +126,18 @@ class WaffleDataset:
             if task is not None and task.lower() != dataset_info.task:
                 raise DatasetTaskError(f"Invalid task: {task}")
             self.task = dataset_info.task
+            self.database_service = DatabaseService(
+                str(self.database_file), image_directory=self.image_dir
+            )
         else:
             if task is None:
                 raise DatasetTaskError(f"Task is not specified")
             self.task = task
             self.initialize()
+            self.database_service = DatabaseService(
+                str(self.database_file), image_directory=self.image_dir
+            )
+            self.create_dataset_info()
 
     def __repr__(self) -> str:
         return f"WaffleDataset(name={self.name}, task={self.task}, root_dir={self.root_dir})"
@@ -141,7 +148,6 @@ class WaffleDataset:
     def initialize(self):
         io.make_directory(self.dataset_dir)
         io.make_directory(self.image_dir)
-        self.create_dataset_info()
 
     def initialized(self) -> bool:
         return self.dataset_info_file.exists()
@@ -244,10 +250,6 @@ class WaffleDataset:
     def log_file(self) -> Path:
         return self.log_dir / "dataset.log"
 
-    @cached_property
-    def database_service(self) -> DatabaseService:
-        return DatabaseService(str(self.database_file), image_directory=self.image_dir)
-
     @property
     def category_dict(self) -> dict[str, CategoryInfo]:
         return self.database_service.get_categories()
@@ -281,7 +283,7 @@ class WaffleDataset:
         return list(self.database_service.get_annotations().values())
 
     # methods (CRUD)
-    # # @update_dataset_decorator
+    @update_dataset_decorator
     @exception_decorator
     def add_category(
         self, category_info: Union[CategoryInfo, list[CategoryInfo], dict, list[dict]]
@@ -516,7 +518,7 @@ class WaffleDataset:
     ) -> list[ImageInfo]:
         return self.database_service.update_image(image_id, update_image_info)
 
-    # @update_dataset_decorator
+    @update_dataset_decorator
     @exception_decorator
     def update_category(
         self,
@@ -539,7 +541,7 @@ class WaffleDataset:
     def delete_image(self, image_id: Union[str, list[str]]):
         self.database_service.delete_image(image_id)
 
-    # @update_dataset_decorator
+    @update_dataset_decorator
     @exception_decorator
     def delete_category(self, category_id: Union[str, list[str]]):
         self.database_service.delete_category(category_id)
@@ -611,6 +613,7 @@ class WaffleDataset:
         root_dir: Union[str, Path] = None,
     ):
         dataset = WaffleDataset.load(name, root_dir=root_dir)
+        del dataset.database_service
         io.remove_directory(dataset.dataset_dir, recursive=True)
         logger.info(f"Dataset deleted [{name}]\n{dataset}")
 
