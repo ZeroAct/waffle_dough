@@ -31,6 +31,7 @@ class DatabaseService:
         self.image_directory = Path(image_directory)
 
     def __del__(self):
+        global conn, engine
         if conn is not None:
             conn.close()
             conn = None
