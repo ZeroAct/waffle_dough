@@ -34,4 +34,4 @@ jobs:
           pip list
       - name: Pytest tests
         shell: bash
-        run: python -m pytest tests/ -v -x -n 4
+        run: python -m pytest tests/ -v -x
