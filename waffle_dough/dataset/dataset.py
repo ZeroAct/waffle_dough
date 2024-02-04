@@ -614,6 +614,7 @@ class WaffleDataset:
     ):
         dataset = WaffleDataset.load(name, root_dir=root_dir)
         del dataset.database_service
+        io.remove_file(dataset.database_file)
         io.remove_directory(dataset.dataset_dir, recursive=True)
         logger.info(f"Dataset deleted [{name}]\n{dataset}")
 
