@@ -94,46 +94,60 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         )
         return query.count()
 
-    def create(self, db: Session, obj_in: CreateSchemaType) -> ModelType:
-        obj_in_data = obj_in.model_dump()
-        db_obj = self.model(**obj_in_data)  # type: ignore
-        db.add(db_obj)
+    def create(
+        self, db: Session, obj_in: Union[CreateSchemaType, list[CreateSchemaType]]
+    ) -> List[ModelType]:
+        db_objs = []
+        for obj in obj_in if isinstance(obj_in, list) else [obj_in]:
+            obj_in_data = obj.model_dump()
+            db_obj = self.model(**obj_in_data)
+            db.add(db_obj)
+            db_objs.append(db_obj)
         self.commit(db)
-        db.refresh(db_obj)
-        return db_obj
+        return db_objs
 
     def update(
         self,
         db: Session,
-        id: str,
-        obj_in: Union[UpdateSchemaType, Dict[str, Any]],
-    ) -> ModelType:
-        # jsonable_encoder sometimes return empty dict
-        # even the model is not empty
-        # obj_in_data = jsonable_encoder(db_obj)
-        obj = db.get(self.model, id)
-        if obj is None:
-            raise DatabaseNotFoundError(f"Object with id {id} not found")
-        obj_in_data = {col.name: str(getattr(obj, col.name)) for col in obj.__table__.columns}
-        if isinstance(obj_in, dict):
-            update_data = obj_in
-        else:
-            update_data = obj_in.model_dump(exclude_unset=True)
-        for field in obj_in_data:
-            if field in update_data and update_data[field] is not None:
-                setattr(obj, field, update_data[field])
-        db.add(obj)
-        self.commit(db)
-        db.refresh(obj)
-        return obj
+        id: Union[str, list[str]],
+        obj_in: Union[
+            UpdateSchemaType, Dict[str, Any], list[Union[UpdateSchemaType, Dict[str, Any]]]
+        ],
+    ) -> List[ModelType]:
+        ids = id if isinstance(id, list) else [id]
+        obj_ins = obj_in if isinstance(obj_in, list) else [obj_in]
 
-    def remove(self, db: Session, id: Any) -> ModelType:
-        obj = db.get(self.model, id)
-        if obj is None:
-            raise DatabaseNotFoundError(f"[{self.__class__.__name__}] Object with id {id} not found")
-        db.delete(obj)
+        db_objs = []
+        for id, obj_in in zip(ids, obj_ins):
+            obj = db.get(self.model, id)
+            if obj is None:
+                raise DatabaseNotFoundError(f"Object with id {id} not found")
+            obj_in_data = {col.name: str(getattr(obj, col.name)) for col in obj.__table__.columns}
+            if isinstance(obj_in, dict):
+                update_data = obj_in
+            else:
+                update_data = obj_in.model_dump(exclude_unset=True)
+            for field in obj_in_data:
+                if field in update_data and update_data[field] is not None:
+                    setattr(obj, field, update_data[field])
+            db.add(obj)
+            db_objs.append(obj)
         self.commit(db)
-        return obj
+        return db_objs
+
+    def remove(self, db: Session, id: Union[str, list[str]]) -> List[ModelType]:
+        ids = id if isinstance(id, list) else [id]
+        db_objs = []
+        for id in ids:
+            obj = db.get(self.model, id)
+            if obj is None:
+                raise DatabaseNotFoundError(
+                    f"[{self.__class__.__name__}] Object with id {id} not found"
+                )
+            db.delete(obj)
+            db_objs.append(obj)
+        self.commit(db)
+        return db_objs
 
     def remove_multi(self, db: Session) -> List[ModelType]:
         objs = db.query(self.model).all()

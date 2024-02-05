@@ -126,11 +126,18 @@ class WaffleDataset:
             if task is not None and task.lower() != dataset_info.task:
                 raise DatasetTaskError(f"Invalid task: {task}")
             self.task = dataset_info.task
+            self.database_service = DatabaseService(
+                str(self.database_file), image_directory=self.image_dir
+            )
         else:
             if task is None:
                 raise DatasetTaskError(f"Task is not specified")
             self.task = task
             self.initialize()
+            self.database_service = DatabaseService(
+                str(self.database_file), image_directory=self.image_dir
+            )
+            self.create_dataset_info()
 
     def __repr__(self) -> str:
         return f"WaffleDataset(name={self.name}, task={self.task}, root_dir={self.root_dir})"
@@ -141,7 +148,6 @@ class WaffleDataset:
     def initialize(self):
         io.make_directory(self.dataset_dir)
         io.make_directory(self.image_dir)
-        self.create_dataset_info()
 
     def initialized(self) -> bool:
         return self.dataset_info_file.exists()
@@ -244,10 +250,6 @@ class WaffleDataset:
     def log_file(self) -> Path:
         return self.log_dir / "dataset.log"
 
-    @cached_property
-    def database_service(self) -> DatabaseService:
-        return DatabaseService(str(self.database_file), image_directory=self.image_dir)
-
     @property
     def category_dict(self) -> dict[str, CategoryInfo]:
         return self.database_service.get_categories()
@@ -294,16 +296,14 @@ class WaffleDataset:
                 raise DatasetTaskError(f"Invalid task: {c.task}")
             category_infos.append(c)
 
-        for category_info in category_infos:
-            self.database_service.add_category(category_info)
-
+        self.database_service.add_category(category_infos)
         return category_infos
 
-    @update_dataset_decorator
+    # # @update_dataset_decorator
     @exception_decorator
     def add_image(
         self,
-        image: Union[str, Path, np.ndarray],
+        image: Union[str, Path, np.ndarray, list[Union[str, Path, np.ndarray]]],
         image_info: Union[ImageInfo, list[ImageInfo], dict, list[dict]] = None,
     ) -> list[ImageInfo]:
         images = image if isinstance(image, list) else [image]
@@ -312,6 +312,9 @@ class WaffleDataset:
             image_info = [None] * len(images)
         image_infos = image_info if isinstance(image_info, list) else [image_info]
 
+        db_image_paths = []
+        db_image_infos = []
+        temp_files = []
         for i, (image, image_info) in enumerate(zip(images, image_infos)):
             temp_file = None
             if isinstance(image, np.ndarray):
@@ -340,14 +343,19 @@ class WaffleDataset:
 
             image_infos[i] = image_info
 
-            self.database_service.add_image(image_path, image_info)
+            db_image_paths.append(image_path)
+            db_image_infos.append(image_info)
+            temp_files.append(temp_file)
 
+        self.database_service.add_image(db_image_paths, db_image_infos)
+
+        for temp_file in temp_files:
             if temp_file is not None:
                 temp_file.close()
 
         return image_infos
 
-    @update_dataset_decorator
+    # # @update_dataset_decorator
     @exception_decorator
     def add_annotation(
         self, annotation_info: Union[AnnotationInfo, list[AnnotationInfo], dict, list[dict]]
@@ -360,8 +368,7 @@ class WaffleDataset:
                 raise DatasetTaskError(f"Invalid task: {a.task}")
             annotation_infos.append(a)
 
-        for annotation_info in annotation_infos:
-            self.database_service.add_annotation(annotation_info)
+        self.database_service.add_annotation(annotation_infos)
 
         return annotation_infos
 
@@ -470,54 +477,78 @@ class WaffleDataset:
     ) -> dict[str, dict]:
         image_dict = self.get_image_dict(image_id=image_id, category_id=category_id, split=split)
         category_dict = self.get_category_dict(category_id=category_id)
+        annotation_dict = self.get_annotation_dict(
+            image_id=image_id, category_id=category_id, split=split
+        )
 
         mapper = {}
-        for image_id, image in image_dict.items():
-            annotations = self.get_annotations(image_id=image_id)
-            categories = [category_dict[annotation.category_id] for annotation in annotations]
-            if labeled_only and len(categories) == 0:
-                continue
-            mapper[image_id] = {
-                "image_path": self.get_image_path(image),
-                "image_info": image,
-                "annotations": annotations,
-                "categories": categories,
-            }
+
+        if not labeled_only:
+            for image_id, image in image_dict.items():
+                if image.id not in mapper:
+                    mapper[image.id] = {
+                        "image_path": self.get_image_path(image),
+                        "image_info": image,
+                        "annotations": [],
+                        "categories": [],
+                    }
+
+        for _, annotation in annotation_dict.items():
+            image = image_dict[annotation.image_id]
+            category = category_dict[annotation.category_id]
+
+            if image.id not in mapper:
+                mapper[image.id] = {
+                    "image_path": self.get_image_path(image),
+                    "image_info": image,
+                    "annotations": [],
+                    "categories": [],
+                }
+            mapper[image.id]["annotations"].append(annotation)
+            mapper[image.id]["categories"].append(category)
 
         return mapper
 
-    @update_dataset_decorator
+    # @update_dataset_decorator
     @exception_decorator
-    def update_image(self, image_id: str, update_image_info: UpdateImageInfo) -> ImageInfo:
+    def update_image(
+        self,
+        image_id: Union[str, list[str]],
+        update_image_info: Union[UpdateImageInfo, list[UpdateImageInfo]],
+    ) -> list[ImageInfo]:
         return self.database_service.update_image(image_id, update_image_info)
 
     @update_dataset_decorator
     @exception_decorator
     def update_category(
-        self, category_id: str, update_category_info: UpdateCategoryInfo
-    ) -> CategoryInfo:
+        self,
+        category_id: Union[str, list[str]],
+        update_category_info: Union[UpdateCategoryInfo, list[UpdateCategoryInfo]],
+    ) -> list[CategoryInfo]:
         return self.database_service.update_category(category_id, update_category_info)
 
-    @update_dataset_decorator
+    # @update_dataset_decorator
     @exception_decorator
     def update_annotation(
-        self, annotation_id: str, update_annotation_info: UpdateAnnotationInfo
-    ) -> AnnotationInfo:
+        self,
+        annotation_id: Union[str, list[str]],
+        update_annotation_info: Union[UpdateAnnotationInfo, list[UpdateAnnotationInfo]],
+    ) -> list[AnnotationInfo]:
         return self.database_service.update_annotation(annotation_id, update_annotation_info)
 
-    @update_dataset_decorator
+    # @update_dataset_decorator
     @exception_decorator
-    def delete_image(self, image_id: str):
+    def delete_image(self, image_id: Union[str, list[str]]):
         self.database_service.delete_image(image_id)
 
     @update_dataset_decorator
     @exception_decorator
-    def delete_category(self, category_id: str):
+    def delete_category(self, category_id: Union[str, list[str]]):
         self.database_service.delete_category(category_id)
 
-    @update_dataset_decorator
+    # @update_dataset_decorator
     @exception_decorator
-    def delete_annotation(self, annotation_id: str):
+    def delete_annotation(self, annotation_id: Union[str, list[str]]):
         self.database_service.delete_annotation(annotation_id)
 
     # methods (class methods)
@@ -582,6 +613,8 @@ class WaffleDataset:
         root_dir: Union[str, Path] = None,
     ):
         dataset = WaffleDataset.load(name, root_dir=root_dir)
+        del dataset.database_service
+        io.remove_file(dataset.database_file)
         io.remove_directory(dataset.dataset_dir, recursive=True)
         logger.info(f"Dataset deleted [{name}]\n{dataset}")
 
@@ -782,12 +815,14 @@ class WaffleDataset:
             )
 
         # initialize split
-        for image_id in (
+        old_image_ids = (
             list(self.get_image_dict(split=SplitType.TRAIN).keys())
             + list(self.get_image_dict(split=SplitType.VALIDATION).keys())
             + list(self.get_image_dict(split=SplitType.TEST).keys())
-        ):
-            self.update_image(image_id, UpdateImageInfo(split=SplitType.UNSET))
+        )
+        self.update_image(
+            old_image_ids, [UpdateImageInfo(split=SplitType.UNSET)] * len(old_image_ids)
+        )
 
         # make the sum of ratios to 1
         ratio_sum = train_ratio + val_ratio + test_ratio
@@ -801,12 +836,18 @@ class WaffleDataset:
         ]
         test_image_ids = image_ids[int(len(image_ids) * (train_ratio + val_ratio)) :]
 
-        for image_id in train_image_ids:
-            self.update_image(image_id, UpdateImageInfo(split=SplitType.TRAIN))
-        for image_id in val_image_ids:
-            self.update_image(image_id, UpdateImageInfo(split=SplitType.VALIDATION))
-        for image_id in test_image_ids:
-            self.update_image(image_id, UpdateImageInfo(split=SplitType.TEST))
+        if train_image_ids:
+            self.update_image(
+                train_image_ids, [UpdateImageInfo(split=SplitType.TRAIN)] * len(train_image_ids)
+            )
+        if val_image_ids:
+            self.update_image(
+                val_image_ids, [UpdateImageInfo(split=SplitType.VALIDATION)] * len(val_image_ids)
+            )
+        if test_image_ids:
+            self.update_image(
+                test_image_ids, [UpdateImageInfo(split=SplitType.TEST)] * len(test_image_ids)
+            )
 
         logger.info(
             f"Dataset splitted [{self.name}]\ntrain: {len(train_image_ids)}, val: {len(val_image_ids)}, test: {len(test_image_ids)}"
