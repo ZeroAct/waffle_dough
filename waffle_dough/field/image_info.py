@@ -9,10 +9,21 @@ from waffle_dough.field.validator.image_validator import (
     validate_split,
     validate_width,
 )
-from waffle_dough.type import SplitType, TaskType, get_split_types
+from waffle_dough.type import SplitType, TaskType
 
 
 class ImageInfo(BaseField):
+    """Image Information
+
+    Attributes:
+        ext (str): file ext(including .).
+        width (int): width.
+        height (int): height.
+        original_file_name (str): original file name.
+        date_captured (Optional[str]): date captured.
+        split (SplitType): split type.
+    """
+
     ext: str = Field(...)
     width: int = Field(...)
     height: int = Field(...)

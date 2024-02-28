@@ -23,6 +23,24 @@ from waffle_dough.type import BoxType, SegmentationType, TaskType
 
 
 class AnnotationInfo(BaseField):
+    """Annotation Information
+
+    Attributes:
+        image_id (str): image id.
+        category_id (str): category id.
+        bbox (list[float]): [x1, y1, w, h](0 ~ 1, normalized with image width, height).
+        segmentation (Union[list[list[float]], dict]): [[x1, y1, x2, y2, x3, y3, ...], [polygon]](0 ~ 1, normalized with image width, height) or RLE.
+        area (float): segmentation segmentation or bbox area(0 ~ 1, normalized with image width, height).
+        keypoints (list[float]):
+            [x1, y1, v1(visible flag), x2, y2, v2(visible flag), ...](0 ~ 1, normalized with image width, height)
+            visible flag is one of [0(Not labeled), 1(Labeled but not visible), 2(labeled and visible)]
+        num_keypoints (int): number of labeled keypoints
+        caption (str): string.
+        value (float): regression value.
+        iscrowd (int): is crowd or not.
+        score (float): prediction score(0 ~ 1).
+    """
+
     image_id: str = Field(...)
     category_id: str = Field(None)
     bbox: Optional[list[float]] = Field(None)
@@ -115,7 +133,7 @@ class AnnotationInfo(BaseField):
         Args:
             image_id (str): image id.
             category_id (str): category id.
-            score (float, optional): prediction score. Default to None.
+            score (float, optional): prediction score(0 ~ 1). Default to None.
 
         Returns:
             Annotation: annotation class
@@ -142,10 +160,10 @@ class AnnotationInfo(BaseField):
         Args:
             image_id (str): image id.
             category_id (str): category id.
-            bbox (list[float]): [x1, y1, w, h].
-            area (int): bbox area.
+            bbox (list[float]): [x1, y1, w, h](0 ~ 1, normalized with image width, height).
+            area (int): bbox area(0 ~ 1, normalized with image width, height).
             iscrowd (int, optional): is crowd or not. Default to 0.
-            score (float, optional): prediction score. Default to None.
+            score (float, optional): prediction score(0 ~ 1). Default to None.
 
         Returns:
             Annotation: annotation class
@@ -176,11 +194,11 @@ class AnnotationInfo(BaseField):
         Args:
             image_id (str): image id.
             category_id (str): category id.
-            bbox (list[float]): [x1, y1, w, h].
-            segmentation (Union[list[list[float]], dict]): [[x1, y1, x2, y2, x3, y3, ...], [polygon]] or RLE.
-            area (int): segmentation segmentation area.
+            bbox (list[float]): [x1, y1, w, h](0 ~ 1, normalized with image width, height).
+            segmentation (Union[list[list[float]], dict]): [[x1, y1, x2, y2, x3, y3, ...], [polygon]](0 ~ 1, normalized with image width, height) or RLE.
+            area (int): segmentation segmentation area(0 ~ 1, normalized with image width, height).
             iscrowd (int, optional): is crowd or not. Default to 0.
-            score (float, optional): prediction score. Default to None.
+            score (float, optional): prediction score. Default to None(0 ~ 1). Default to None.
 
         Returns:
             Annotation: annotation class
@@ -212,11 +230,11 @@ class AnnotationInfo(BaseField):
         Args:
             image_id (str): image id.
             category_id (str): category id.
-            bbox (list[float]): [x1, y1, w, h].
-            segmentation (Union[list[list[float]], dict]): [[x1, y1, x2, y2, x3, y3, ...], [polygon]] or RLE.
-            area (int): segmentation segmentation area.
+            bbox (list[float]): [x1, y1, w, h](0 ~ 1, normalized with image width, height).
+            segmentation (Union[list[list[float]], dict]): [[x1, y1, x2, y2, x3, y3, ...], [polygon]](0 ~ 1, normalized with image width, height) or RLE.
+            area (int): segmentation segmentation area(0 ~ 1, normalized with image width, height).
             iscrowd (int, optional): is crowd or not. Default to 0.
-            score (float, optional): prediction score. Default to None.
+            score (float, optional): prediction score(0 ~ 1). Default to None.
 
         Returns:
             Annotation: annotation class
@@ -250,15 +268,15 @@ class AnnotationInfo(BaseField):
         Args:
             image_id (str): image id.
             category_id (str): category id.
-            bbox (list[float]): [x1, y1, w, h].
+            bbox (list[float]): [x1, y1, w, h](0 ~ 1, normalized with image width, height).
             keypoints (list[float]):
-                [x1, y1, v1(visible flag), x2, y2, v2(visible flag), ...].
+                [x1, y1, v1(visible flag), x2, y2, v2(visible flag), ...](0 ~ 1, normalized with image width, height)
                 visible flag is one of [0(Not labeled), 1(Labeled but not visible), 2(labeled and visible)]
             num_keypoints: number of labeled keypoints
-            area (int): segmentation segmentation or bbox area.
-            segmentation (list[list[float]], optional): [[x1, y1, x2, y2, x3, y3, ...], [polygon]].
+            area (int): segmentation segmentation or bbox area(0 ~ 1, normalized with image width, height).
+            segmentation (list[list[float]], optional): [[x1, y1, x2, y2, x3, y3, ...], [polygon]](0 ~ 1, normalized with image width, height) or RLE. Default to None.
             iscrowd (int, optional): is crowd or not. Default to 0.
-            score (list[float], optional): prediction scores. Default to None.
+            score (list[float], optional): prediction scores(0 ~ 1). Default to None.
 
         Returns:
             Annotation: annotation class
@@ -277,13 +295,16 @@ class AnnotationInfo(BaseField):
         )
 
     @classmethod
-    def regression(cls, image_id: str, category_id: str, value: float) -> "AnnotationInfo":
+    def regression(
+        cls, image_id: str, category_id: str, value: float, score: float = None
+    ) -> "AnnotationInfo":
         """Regression Annotation Format
 
         Args:
             image_id (str): image id.
             category_id (str): category id.
             value (float): regression value.
+            score (float, optional): prediction score(0 ~ 1). Default to None.
 
         Returns:
             Annotation: annotation class
@@ -293,6 +314,7 @@ class AnnotationInfo(BaseField):
             image_id=image_id,
             category_id=category_id,
             value=value,
+            score=score,
         )
 
     @classmethod
@@ -309,7 +331,7 @@ class AnnotationInfo(BaseField):
             image_id (str): image id.
             category_id (str): category id.
             caption (str): string.
-            score (float, optional): prediction score. Default to None.
+            score (float, optional): prediction score(0 ~ 1). Default to None.
 
         Returns:
             Annotation: annotation class

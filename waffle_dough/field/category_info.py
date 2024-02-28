@@ -11,6 +11,15 @@ from waffle_dough.type import TaskType
 
 
 class CategoryInfo(BaseField):
+    """Category Information
+
+    Attributes:
+        name (str): category name.
+        supercategory (str): supercategory name.
+        keypoints (list[str]): category names.
+        skeleton (list[list[int]]): skeleton edges.
+    """
+
     name: str = Field(..., kw_only=True)
     supercategory: str = Field(..., kw_only=True)
     keypoints: Optional[list[str]] = Field(None, kw_only=True)
