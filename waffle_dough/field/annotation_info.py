@@ -2,7 +2,7 @@ from typing import ClassVar, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
 
-from waffle_dough.field.base_field import BaseField
+from waffle_dough.field.base_field import BaseField, CustomBaseModel
 from waffle_dough.field.validator.annotation_validator import (
     validate_area,
     validate_bbox,
@@ -345,7 +345,7 @@ class AnnotationInfo(BaseField):
         )
 
 
-class UpdateAnnotationInfo(BaseModel):
+class UpdateAnnotationInfo(CustomBaseModel):
     category_id: Optional[str] = Field(None)
     bbox: Optional[list[float]] = Field(None)
     segmentation: Optional[Union[dict, list[list[float]]]] = Field(None)

@@ -3,7 +3,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
 
-from waffle_dough.field.base_field import BaseField
+from waffle_dough.field.base_field import BaseField, CustomBaseModel
 from waffle_dough.field.validator.image_validator import (
     validate_height,
     validate_split,
@@ -111,7 +111,7 @@ class ImageInfo(BaseField):
         )
 
 
-class UpdateImageInfo(BaseModel):
+class UpdateImageInfo(CustomBaseModel):
     split: Optional[SplitType] = Field(None)
 
     @field_validator("split")

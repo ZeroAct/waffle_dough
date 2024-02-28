@@ -2,7 +2,7 @@ from typing import ClassVar, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from waffle_dough.field.base_field import BaseField
+from waffle_dough.field.base_field import BaseField, CustomBaseModel
 from waffle_dough.field.validator.category_validator import (
     validate_keypoints,
     validate_skeleton,
@@ -194,7 +194,7 @@ class CategoryInfo(BaseField):
         )
 
 
-class UpdateCategoryInfo(BaseModel):
+class UpdateCategoryInfo(CustomBaseModel):
     name: Optional[str] = Field(None)
     supercategory: Optional[str] = Field(None)
     keypoints: Optional[list[str]] = Field(None)
