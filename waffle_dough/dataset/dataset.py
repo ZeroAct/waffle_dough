@@ -108,6 +108,33 @@ class DatasetStatistics:
 
 
 class WaffleDataset:
+    """WaffleDataset class
+
+    WaffleDataset is a programmatic interface for managing datasets.
+    It provide several methods such as data CRUD, format conversion, visualization, etc...
+
+    Attributes:
+        name (str): Name of the dataset
+        task (str): Task of the dataset
+        root_dir (str): Root directory of the dataset
+        dataset_dir (Path): Directory of the dataset
+        dataset_info_file (Path): File path of the dataset info
+        image_dir (Path): Directory of the images
+        database_file (Path): File path of the database
+        export_dir (Path): Directory of the exported data
+        log_dir (Path): Directory of the logs
+        log_file (Path): File path of the log
+        category_dict (dict[str, CategoryInfo]): Dictionary of the categories
+        category_name_dict (dict[str, CategoryInfo]): Dictionary of the categories by name
+        categories (list[CategoryInfo]): List of the categories
+        category_names (list[str]): List of the category names
+        image_dict (dict[str, ImageInfo]): Dictionary of the images
+        images (list[ImageInfo]): List of the images
+        annotation_dict (dict[str, AnnotationInfo]): Dictionary of the annotations
+        annotations (list[AnnotationInfo]): List of the annotations
+
+    """
+
     DATASET_INFO_FILE_NAME = "dataset.yaml"
     DATABASE_FILE_NAME = "database.sqlite3"
     IMAGE_DIR_NAME = "images"
@@ -586,6 +613,16 @@ class WaffleDataset:
         task: Union[str, TaskType],
         root_dir: Union[str, Path] = None,
     ) -> "WaffleDataset":
+        """Create a new dataset
+
+        Args:
+            name (str): Name of the dataset
+            task (str): Task of the dataset. One of the TaskType.
+            root_dir (str, optional): Root directory of the dataset
+
+        Returns:
+            WaffleDataset: Created dataset
+        """
         if name in WaffleDataset.get_dataset_list(root_dir=root_dir):
             raise DatasetAlreadyExistsError(f"Dataset '{name}' already exists")
         dataset = WaffleDataset(name, task, root_dir=root_dir)
@@ -599,6 +636,15 @@ class WaffleDataset:
         name: str,
         root_dir: Union[str, Path] = None,
     ) -> "WaffleDataset":
+        """Load an existing dataset
+
+        Args:
+            name (str): Name of the dataset
+            root_dir (str, optional): Root directory of the dataset
+
+        Returns:
+            WaffleDataset: Loaded dataset
+        """
         if name not in WaffleDataset.get_dataset_list(root_dir=root_dir):
             raise DatasetNotFoundError(f"Dataset '{name}' does not exists")
         dataset = WaffleDataset(name, root_dir=root_dir)
@@ -612,6 +658,12 @@ class WaffleDataset:
         name: str,
         root_dir: Union[str, Path] = None,
     ):
+        """Delete an existing dataset
+
+        Args:
+            name (str): Name of the dataset
+            root_dir (str, optional): Root directory of the dataset
+        """
         dataset = WaffleDataset.load(name, root_dir=root_dir)
         del dataset.database_service
         io.remove_file(dataset.database_file)
@@ -626,6 +678,16 @@ class WaffleDataset:
         dst_name: str,
         root_dir: Union[str, Path] = None,
     ) -> "WaffleDataset":
+        """Copy an existing dataset
+
+        Args:
+            src_name (str): Name of the source dataset
+            dst_name (str): Name of the destination dataset
+            root_dir (str, optional): Root directory of the dataset
+
+        Returns:
+            WaffleDataset: Copied dataset
+        """
         src_dataset = WaffleDataset.load(src_name, root_dir=root_dir)
         dst_dataset = WaffleDataset.new(dst_name, src_dataset.task, root_dir=root_dir)
 
@@ -676,6 +738,37 @@ class WaffleDataset:
             new_annotations.append(annotation)
         self.add_annotation(new_annotations)
 
+        return self
+
+    @exception_decorator
+    def import_waffle(
+        self,
+        name: str,
+        split: Union[str, SplitType] = None,
+        root_dir: Union[str, Path] = None,
+    ) -> "WaffleDataset":
+        """Import an existing Waffle dataset
+
+        Args:
+            name (str): Name of the source dataset
+            split (str, optional): Split of the dataset
+            root_dir (str, optional): Root directory of the dataset
+
+        Returns:
+            WaffleDataset: Imported dataset
+        """
+        source_dataset = WaffleDataset.load(name, root_dir=root_dir)
+
+        self.import_data(
+            image_dict=source_dataset.image_dict,
+            annotation_dict=source_dataset.annotation_dict,
+            category_dict=source_dataset.category_dict,
+            image_dir=source_dataset.image_dir,
+            split=split,
+        )
+
+        return self
+
     @exception_decorator
     def import_coco(
         self,
@@ -684,6 +777,17 @@ class WaffleDataset:
         split: Union[str, SplitType] = None,
         callbacks: list[BaseDatasetAdapterCallback] = None,
     ) -> "WaffleDataset":
+        """Import COCO dataset
+
+        Args:
+            coco (str, Path, dict): COCO dataset
+            coco_image_dir (str, Path): Directory of the COCO images
+            split (str, optional): Split of the dataset
+            callbacks (list[BaseDatasetAdapterCallback], optional): List of the callbacks
+
+        Returns:
+            WaffleDataset: Imported dataset
+        """
         adapter = COCOAdapter(
             task=self.task,
             callbacks=[
@@ -712,6 +816,16 @@ class WaffleDataset:
         split: Union[str, SplitType] = None,
         callbacks: list[BaseDatasetAdapterCallback] = None,
     ) -> "WaffleDataset":
+        """Import YOLO dataset
+
+        Args:
+            yolo_root_dir (str, Path): Root directory of the YOLO dataset
+            split (str, optional): Split of the dataset
+            callbacks (list[BaseDatasetAdapterCallback], optional): List of the callbacks
+
+        Returns:
+            WaffleDataset: Imported dataset
+        """
         adapter = YOLOAdapter(
             task=self.task,
             callbacks=[
@@ -741,6 +855,17 @@ class WaffleDataset:
         callbacks: list[BaseDatasetAdapterCallback] = None,
         force: bool = False,
     ) -> str:
+        """Export dataset
+
+        Args:
+            data_type (str, DataType): Type of the exported data
+            result_dir (str, Path, optional): Directory of the exported data
+            callbacks (list[BaseDatasetAdapterCallback], optional): List of the callbacks
+            force (bool, optional): Whether to force the export
+
+        Returns:
+            str: Directory of the exported data
+        """
         result_dir = Path(result_dir or self.export_dir).absolute()
         if result_dir.exists():
             if not force:
@@ -795,6 +920,14 @@ class WaffleDataset:
         test_ratio: float = 0.1,
         seed: int = 42,
     ):
+        """Randomly split the dataset
+
+        Args:
+            train_ratio (float, optional): Ratio of the training set
+            val_ratio (float, optional): Ratio of the validation set
+            test_ratio (float, optional): Ratio of the test set
+            seed (int, optional): Seed of the random number generator
+        """
         image_ids = list(self.get_mapper(labeled_only=True).keys())
         if len(image_ids) == 0:
             raise DatasetEmptyError(f"There are no labeled images")
@@ -862,6 +995,18 @@ class WaffleDataset:
         preprocess=None,
         augment=None,
     ) -> Iterator:
+        """Get dataset iterator
+
+        Args:
+            image_id (str, list[str], optional): ID of the image
+            category_id (str, list[str], optional): ID of the category
+            split (str, optional): Split of the dataset
+            preprocess (callable, optional): Preprocess function
+            augment (callable, optional): Augment function
+
+        Returns:
+            Iterator: Dataset iterator
+        """
         return Iterator(
             self.get_mapper(image_id=image_id, category_id=category_id, split=split),
             preprocess=preprocess,
@@ -877,6 +1022,18 @@ class WaffleDataset:
         result_dir: Union[str, Path] = None,
         show: bool = False,
     ) -> Path:
+        """Visualize dataset
+
+        Args:
+            image_id (str, list[str], optional): ID of the image
+            category_id (str, list[str], optional): ID of the category
+            split (str, optional): Split of the dataset
+            result_dir (str, Path, optional): Directory of the result
+            show (bool, optional): Whether to show the visualization
+
+        Returns:
+            Path: Directory of the result
+        """
         it = self.get_dataset_iterator(image_id=image_id, category_id=category_id, split=split)
         category_dict = self.get_category_dict()
 
