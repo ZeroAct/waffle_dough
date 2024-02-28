@@ -23,12 +23,12 @@ import logging
 import os
 import random
 from dataclasses import asdict, dataclass
-from functools import cached_property
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Union
 
 import numpy as np
+from natsort import natsorted
 from tqdm import tqdm
 from waffle_utils.file import io
 from waffle_utils.logger import datetime_now, initialize_logger
@@ -569,7 +569,7 @@ class WaffleDataset:
                 dataset_info = DatasetInfo.from_dict(io.load_yaml(dataset_info_file))
                 if task is None or TaskType.from_str(task) == dataset_info.task:
                     dataset_list.append(Path(dataset_dir).name)
-        return dataset_list
+        return natsorted(dataset_list)
 
     @classmethod
     @exception_decorator
